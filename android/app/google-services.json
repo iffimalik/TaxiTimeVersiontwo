@@ -1,0 +1,243 @@
+{
+  "project_info": {
+    "project_number": "986098722414",
+    "firebase_url": "https://taxilatest.firebaseio.com",
+    "project_id": "taxilatest",
+    "storage_bucket": "taxilatest.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:986098722414:android:9d930a9c8b2e6128",
+        "android_client_info": {
+          "package_name": "com.khybertech.taxi360driver"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "986098722414-c1stkkf1j6jqqreo6ks1efluqg13cvlg.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.khybertech.taxi360driver",
+            "certificate_hash": "70265442704430c654e3f3c2f925f0e79198d09c"
+          }
+        },
+        {
+          "client_id": "986098722414-f0gkbgi7ul83l26svuf95s5gjuujd2eo.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.khybertech.taxi360driver",
+            "certificate_hash": "5952e417a5ed387d08c018e53bac91af80e2ec5d"
+          }
+        },
+        {
+          "client_id": "986098722414-hdar1iqrgvggb2f8fit6api20g09cltb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.khybertech.taxi360driver",
+            "certificate_hash": "f04d91fea204885f988884da9285b66fbee56acb"
+          }
+        },
+        {
+          "client_id": "986098722414-m195kt92rblllovor907q6u16mbjceaj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB4l7FN9UfNEgRxjLeeganJFpowaj9bkX8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "986098722414-m195kt92rblllovor907q6u16mbjceaj.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "986098722414-587nvinevq6gemt01klhqnkq8p6gt5n1.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.khyberTech.taxi360passenger"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:986098722414:android:15c5aebce9db6a77b7e87f",
+        "android_client_info": {
+          "package_name": "com.khybertech.taxiapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "986098722414-2baircdhuuc58enucf9d8f4gdrm9tltd.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.khybertech.taxiapp",
+            "certificate_hash": "6e1d126f491a86a4c96fe6e7de9b1843dd545f81"
+          }
+        },
+        {
+          "client_id": "986098722414-4ni5qtd78qios27ddg9d8vooncd7fver.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.khybertech.taxiapp",
+            "certificate_hash": "3eebc5615bc9d8803919f2b8d59849d06610b1ff"
+          }
+        },
+        {
+          "client_id": "986098722414-g711i1fd92t88cfip1vs6luk6far68mf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.khybertech.taxiapp",
+            "certificate_hash": "5952e417a5ed387d08c018e53bac91af80e2ec5d"
+          }
+        },
+        {
+          "client_id": "986098722414-isg7ptpi4fjthr91e4jo9bhsl6l5n8l8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.khybertech.taxiapp",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "986098722414-kvc3tc399j3f6f3td8ep4ts3gc0m4m6m.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.khybertech.taxiapp",
+            "certificate_hash": "70265442704430c654e3f3c2f925f0e79198d09c"
+          }
+        },
+        {
+          "client_id": "986098722414-mk0jaiukebmimt8uh6jqddfluourtne4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.khybertech.taxiapp",
+            "certificate_hash": "8d6a3b7972761c604edf38594c2555ed34e55ce8"
+          }
+        },
+        {
+          "client_id": "986098722414-nlkg4b26u8kbual6r2djulnluqvfe5d8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.khybertech.taxiapp",
+            "certificate_hash": "e157ba7cdc1ee6d4f720def368710180d6f0f2f1"
+          }
+        },
+        {
+          "client_id": "986098722414-uft9ldrc48aiijljud52b2l2qcmvpfic.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.khybertech.taxiapp",
+            "certificate_hash": "2937c7dde5ed866512e23e11366d1f47693fed50"
+          }
+        },
+        {
+          "client_id": "986098722414-m195kt92rblllovor907q6u16mbjceaj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB4l7FN9UfNEgRxjLeeganJFpowaj9bkX8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "986098722414-m195kt92rblllovor907q6u16mbjceaj.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "986098722414-587nvinevq6gemt01klhqnkq8p6gt5n1.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.khyberTech.taxi360passenger"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:986098722414:android:6ccc406b051811f9b7e87f",
+        "android_client_info": {
+          "package_name": "com.khybertech.taxitime"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "986098722414-m195kt92rblllovor907q6u16mbjceaj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB4l7FN9UfNEgRxjLeeganJFpowaj9bkX8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "986098722414-m195kt92rblllovor907q6u16mbjceaj.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "986098722414-587nvinevq6gemt01klhqnkq8p6gt5n1.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.khyberTech.taxi360passenger"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:986098722414:android:abbbc9f73e2898c8b7e87f",
+        "android_client_info": {
+          "package_name": "com.taxitime.driver"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "986098722414-m195kt92rblllovor907q6u16mbjceaj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB4l7FN9UfNEgRxjLeeganJFpowaj9bkX8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "986098722414-m195kt92rblllovor907q6u16mbjceaj.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "986098722414-587nvinevq6gemt01klhqnkq8p6gt5n1.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.khyberTech.taxi360passenger"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
