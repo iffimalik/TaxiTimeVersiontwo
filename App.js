@@ -1,34 +1,14 @@
 import React from 'react';
-import { Button, View, StyleSheet } from 'react-native';
-import { startService , stopService } from './src/BackgroundService';
+import { NavigationContainer } from '@react-navigation/native';
+import DriverStack from './src/navigation/DriverStack';
+import { ShiftProvider } from './src/context/ShiftContext';
 
-const App = () => (
-  <View style={styles.container}>
-    <Button 
-      title="Start Background Task" 
-      onPress={() => {
-
-        alert("asdsad");
-        try {
-              startService();
-        } catch (Ex) {
-          console.log(Ex.message);
-          }
-      }} 
-    />
-    <Button
-      title="Stop Background Task"
-      onPress={stopService}
-    />
-  </View>
-);
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 20,
-  },
-});
-
-export default App;
+export default function App() {
+  return (
+    <ShiftProvider>
+      <NavigationContainer>
+        <DriverStack />
+      </NavigationContainer>
+    </ShiftProvider>
+  );
+}

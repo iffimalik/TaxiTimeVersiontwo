@@ -1,9 +1,27 @@
 import BackgroundService from 'react-native-background-actions';
 import { PermissionsAndroid, Platform, Alert } from 'react-native';
  
+import  useJobStore  from './store/jobStore';
+
+const currentJob = useJobStore.getState().currentJob;
 
 const sleep = time => new Promise(resolve => setTimeout(resolve, time));
 import Geolocation from 'react-native-geolocation-service';
+const getCurrentLocation = () => {
+  return new Promise((resolve, reject) => {
+    Geolocation.getCurrentPosition(
+      position => resolve(position),
+      error => reject(error),
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 10000,
+        forceRequestLocation: true,
+        showLocationDialog: true,
+      }
+    );
+  });
+};
 
 const veryIntensiveTask = async (taskDataArguments) => {
   const { delay } = taskDataArguments;
@@ -11,23 +29,34 @@ const veryIntensiveTask = async (taskDataArguments) => {
 
   while (BackgroundService.isRunning()) {
     count++;
-
-    Geolocation.getCurrentPosition(
-      position => {
-        const { latitude, longitude } = position.coords;
+    console.log(`Running task iteration ${count}`);
+    
+    try {
+      if (count == 5) {
+              const position = await getCurrentLocation();
+           const { latitude, longitude } = position.coords;
         console.log(`GPS [${count}]:`, latitude, longitude);
-      },
-      error => {
-        console.log(`GPS error [${count}]:`, error.message);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 10000,
-        forceRequestLocation: true,  // ✅ helps get fresh GPS fix
-        showLocationDialog: true
+         }
+   
+       } catch (error) {
+          console.log(`GPS error [${count}]:`, error.message);
+        }
+      const jobStore = useJobStore.getState();
+      const currentJob = jobStore.currentJob;
+
+ 
+    if (currentJob && !currentJob.jobOpened) {
+      try {
+        // await Linking.openURL('yourapp://jobstep');
+        console.log(`Opened JobStep screen for job: ${currentJob.id}`);
+
+        // ✅ update jobOpened inside currentJob
+        jobStore.setCurrentJob({ ...currentJob, jobOpened: true });
+      } catch (err) {
+        console.log('Error opening job step screen:', err.message);
       }
-    );
+    }
+
 
     await sleep(delay);
   }
@@ -82,6 +111,10 @@ export const startService = async () => {
     });
 
     console.log('Background service started successfully.');
+
+
+
+
   } catch (e) {
     Alert.alert('Error', e.message);
   }
