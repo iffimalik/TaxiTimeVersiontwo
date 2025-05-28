@@ -1,15 +1,14 @@
+// store/locationStore.js
 import { create } from 'zustand';
 
 const useLocationStore = create((set) => ({
-  currentLocation: null,
-  locationUpdates: [],
-  isTracking: false,
-  
-  setCurrentLocation: (location) => set({ currentLocation: location }),
-  addLocationUpdate: (location) => 
-    set(state => ({ locationUpdates: [...state.locationUpdates, location] })),
-  clearLocations: () => set({ locationUpdates: [] }),
-  setIsTracking: (isTracking) => set({ isTracking }),
+  latitude: null,
+  longitude: null,
+  isBackgroundServiceRunning: false,
+
+setLocation: ({ latitude, longitude }) => set({ latitude, longitude }),
+ 
+  setBackgroundServiceRunning: (isRunning) => set({ isBackgroundServiceRunning: isRunning }),
 }));
 
 export default useLocationStore;

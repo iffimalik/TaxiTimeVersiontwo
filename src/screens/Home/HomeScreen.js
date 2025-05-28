@@ -22,7 +22,13 @@
 
   import { useContext } from 'react';
   import { ShiftContext } from '../../context/ShiftContext'; // adjust path as needed
-import { stopService } from '../../BackgroundService';
+import { stopService  , startService} from './../../BackgroundService';
+ 
+import useLocationStore from '../../store/locationStore'; // adjust path as needed
+import LocationDisplay from './HomeComponent/LocationDisplay';
+import CurrentAddress from './HomeComponent/CurrentAddress';
+ 
+
 
   const HomeScreen = ({ navigation }) => {
     const [logoutLoading, setLogoutLoading] = useState(false);
@@ -108,9 +114,27 @@ import { stopService } from '../../BackgroundService';
     const handleReject = () => {
       clearJob();
     };
+    const [latitude, setLatitude] = useState(null);
+    const [longitude, setLongitude] = useState(null);
     useEffect(() => {
+
+
+          const checkAndStartService = async () => {
+            const { isBackgroundServiceRunning, latitude, longitude, } = useLocationStore.getState();
+          
+          
+            if (!isBackgroundServiceRunning) {
+              console.log('Service was not running — starting now...');
+              await startService();
+            }
+          };
+
+          checkAndStartService();
+
       const unsubscribe = NetInfo.addEventListener(state => {});
       return () => unsubscribe();
+
+  
     }, []);
 
     const handleLogout = async () => {
@@ -152,8 +176,9 @@ import { stopService } from '../../BackgroundService';
           </TouchableOpacity>
         </View> */}
         <View style={styles.header}>
-    <Text style={styles.title}>Driver Dashboard</Text>
-    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Text style={styles.title}>Driver Dashboard</Text>
+          <LocationDisplay />
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
       {isShiftStarted ? (
         // Show Shift Close button with confirmation
         <TouchableOpacity
@@ -199,25 +224,16 @@ import { stopService } from '../../BackgroundService';
 
 
         <NetworkBanner />
-        <TouchableOpacity
-            onPress={() => {
-              simulateJob();        // Set the dummy job
-              setJobStatus('started'); // Mark as started (optional, based on your flow)
-              // navigation.navigate('JobTrackingScreen'); // Navigate to tracking screen
-            }}
-            style={{
+        <CurrentAddress style={{
               backgroundColor: '#2f80ed',
               padding: 14,
               margin: 12,
-              borderRadius: 10,
+          borderRadius: 10,
+              marginBottom: "100%",
               alignItems: 'center',
-            }}
-          >
-            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>
-              Start Dummy Job
-            </Text>
-          </TouchableOpacity>
-
+            }}/>
+       
+            
         <ScrollView
           contentContainerStyle={styles.scrollContainer}
           refreshControl={
@@ -228,6 +244,7 @@ import { stopService } from '../../BackgroundService';
           <View style={styles.cardRow}>
             <View style={styles.card}>
               <Ionicons name="location-outline" size={26} color="#2f80ed" />
+           
               <Text style={styles.cardLabel}>Next Destination</Text>
               <Text style={styles.cardValue}>Al Sadd, Doha</Text>
             </View>
@@ -237,7 +254,19 @@ import { stopService } from '../../BackgroundService';
               <Text style={styles.cardValue}>3 Completed</Text>
             </View>
           </View>
-
+          <TouchableOpacity
+                  style={styles.startJobButton}
+            onPress={() => {
+              simulateJob();        // Set the dummy job
+              setJobStatus('started'); // Mark as started (optional, based on your flow)
+              // navigation.navigate('JobTrackingScreen'); // Navigate to tracking screen
+            }}
+            
+          >
+             <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>
+              Start Dummy Job
+            </Text>  
+          </TouchableOpacity>
           {/* Overview */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Today’s Overview</Text>
@@ -469,7 +498,16 @@ import { stopService } from '../../BackgroundService';
     backgroundColor: '#2f80ed',
     paddingVertical: 14,
     borderRadius: 8,
-    alignItems: 'center',
+      alignItems: 'center',
+    marginVertical: 16,
+    marginHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+    flexDirection: 'row',
+    alignItems: 'center', 
     justifyContent: 'center',
   },
 

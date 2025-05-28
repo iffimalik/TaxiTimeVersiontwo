@@ -8,6 +8,7 @@ import RegisterScreen from '../screens/Auth/RegisterScreen';
 import HomeScreen from '../screens/Home/HomeScreen';
 import JobTrackingScreen from '../screens/Home/JobTrackingScreen';
 import StartShiftScreen from '../screens/Home/StartShiftScreen';
+import JobAcceptScreen from '../screens/Home/Job/AcceptJobScreen';
 
 import { ShiftContext } from '../context/ShiftContext';
 
@@ -50,6 +51,8 @@ useEffect(() => {
         <>
           <Stack.Screen name="Home" component={HomeScreen} />
           <Stack.Screen name="JobTrackingScreen" component={JobTrackingScreen} />
+          <Stack.Screen name="AcceptJobScreen" component={JobAcceptScreen} />
+          
         </>
       )}
     </Stack.Navigator>

@@ -8,6 +8,7 @@ const useJobStore = create((set) => ({
   setCurrentJob: (job) => set({ currentJob: job }),
   setJobStatus: (status) => set({ jobStatus: status }),
   clearJob: () => set({ currentJob: null, jobStatus: 'pending' }),
+
   updateCurrentJob: (updates) =>
   set(state => ({
     currentJob: state.currentJob
