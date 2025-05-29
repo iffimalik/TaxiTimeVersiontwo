@@ -24,7 +24,7 @@ const LocationDisplay = () => {
         lastCoords.current = { lat: latitude, lng: longitude };
       }
 
-      if (changeCounter.current % 10 === 0) {
+      if (changeCounter.current % 100 === 0) {
         const fetchLocationName = async () => {
           try {
             const response = await fetch(
@@ -35,7 +35,7 @@ const LocationDisplay = () => {
             setLocationName(displayName);
             console.log('Location Name:', displayName);
           } catch (error) {
-            console.error('Error fetching address:', error);
+            console.log('Error fetching address:', error.message);
             setLocationName('Unable to fetch location');
           }
         };

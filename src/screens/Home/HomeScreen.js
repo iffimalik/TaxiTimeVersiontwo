@@ -48,10 +48,7 @@ import CurrentAddress from './HomeComponent/CurrentAddress';
       destinationLng: 51.5455120537612,  
         
     });
-    // const [activeJob, setActiveJob] = useState(null);
-    const { currentJob, setCurrentJob, setJobStatus, clearJob } = useJobStore();
-
-    const [upcomingJob, setUpcomingJob] = useState(null);
+     const [upcomingJob, setUpcomingJob] = useState(null);
 
     const [availableJobs, setAvailableJobs] = useState([
       { id: 'a1', destination: 'Souq Waqif', details: 'Pickup at 4pm', earning: 'QAR 100' ,destinationLat: 25.274188294053577,
@@ -66,8 +63,7 @@ import CurrentAddress from './HomeComponent/CurrentAddress';
       destinationLng: 51.5455120537612,},
             
     ]);
-    // const [availableJobs, setAvailableJobs] = useState(null);
-    const mockPreviousJobs = [
+      const mockPreviousJobs = [
       { id: '1', destination: 'West Bay', earnings: 'QAR 300', date: '2025-05-20' ,destinationLat: 25.274188294053577,
       destinationLng: 51.5455120537612,},
       { id: '2', destination: 'The Pearl', earnings: 'QAR 150', date: '2025-05-19' ,destinationLat: 25.274188294053577,
@@ -75,6 +71,7 @@ import CurrentAddress from './HomeComponent/CurrentAddress';
       { id: '3', destination: 'Lusail', earnings: 'QAR 250', date: '2025-05-18' ,destinationLat: 25.274188294053577,
       destinationLng: 51.5455120537612,},
     ];
+    // const [activeJob, setActiveJob] = useState(null);
     const simulateJob = () => {
   const fakeJob = {
     id: 'JOB-2025-001',
@@ -84,36 +81,41 @@ import CurrentAddress from './HomeComponent/CurrentAddress';
     pickupLng: 51.520008,
     dropoffLat: 25.319860,
     dropoffLng: 51.437540,
+    destination: 'Education City',
+    CreatedAt: '2025-05-25T14:30:00+03:00',
+    earningsSoFar: 'QAR 120',
+    pickupTime: '2025-05-25T14:30:00+03:00',
+    dropoffTime: '2025-05-25T15:00:00+03:00',
     riderName: 'Ahmed Al Thani',
     riderPhone: '+974 5512 3412',
     estimatedFare: 'QAR 120.00',
-    status: 'on_the_way', // could be: pending, accepted, on_the_way, arrived, started, completed
+    status: 'pending', // could be: pending, accepted, on_the_way, arrived, started, completed
     distance: '18.4 km',
     estimatedDuration: '25 mins',
     vehicle: {
       type: 'Sedan',
       plate: 'QAT-54321',
       color: 'White',
-      model: 'Toyota Camry 2022'
+      model: 'Toyota Camry 2022',
     },
     pickupTime: '2025-05-25T15:00:00+03:00',
     assignedAt: '2025-05-25T14:45:00+03:00',
     notes: 'Customer has luggage. Assist if needed.',
+    destinationLat: 25.319860, // Example coordinates
+    destinationLng: 51.437540, // Example coordinates
+   
+    // Reset navigation flags for simulation
+    jobOpened: false,
+    navigatedToTracking: false,
   };
 
+  const { setCurrentJob, setJobStatus } = useJobStore.getState();
+
   setCurrentJob(fakeJob);
+  // setJobStatus(fakeJob.status); // sync store status too
 };
 
-
-    
-    const handleAccept = () => {
-      setJobStatus('accepted');
-      navigation.navigate('JobTrackingScreen');
-    };
-
-    const handleReject = () => {
-      clearJob();
-    };
+     
     const [latitude, setLatitude] = useState(null);
     const [longitude, setLongitude] = useState(null);
     useEffect(() => {
@@ -177,7 +179,7 @@ import CurrentAddress from './HomeComponent/CurrentAddress';
         </View> */}
         <View style={styles.header}>
           <Text style={styles.title}>Driver Dashboard</Text>
-          <LocationDisplay />
+          {/* <LocationDisplay /> */}
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
       {isShiftStarted ? (
         // Show Shift Close button with confirmation
@@ -258,7 +260,8 @@ import CurrentAddress from './HomeComponent/CurrentAddress';
                   style={styles.startJobButton}
             onPress={() => {
               simulateJob();        // Set the dummy job
-              setJobStatus('started'); // Mark as started (optional, based on your flow)
+              // setJobStatus('started'); // Mark as started (optional, based on your flow)
+              // setJobStatus(fakeJob.status); // sync store status too
               // navigation.navigate('JobTrackingScreen'); // Navigate to tracking screen
             }}
             

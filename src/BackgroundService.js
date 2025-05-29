@@ -3,7 +3,8 @@ import { PermissionsAndroid, Platform, Alert } from 'react-native';
 import Geolocation from 'react-native-geolocation-service';
 import useJobStore from './store/jobStore';
 import useLocationStore from './store/locationStore';
- import { navigate } from './navigation/navigationService'; // adjust path as needed
+import { navigationRef, navigate } from './navigation/navigationService'; // adjust path if needed
+ 
 
 const sleep = time => new Promise(resolve => setTimeout(resolve, time));
 
@@ -23,40 +24,166 @@ const getCurrentLocation = () => {
   });
 };
 
+// const veryIntensiveTask = async (taskDataArguments) => {
+//   const { delay } = taskDataArguments;
+//   let count = 0;
+
+//   const locationStore = useLocationStore.getState();
+//   const jobStore = useJobStore.getState();
+
+//   while (BackgroundService.isRunning()) {
+//     count++;
+    
+    
+//     try {
+//       const position = await getCurrentLocation();
+//       const { latitude, longitude } = position.coords;
+      
+
+//       // Save to location store
+//       // locationStore.setLocation(latitude, longitude);
+//        useLocationStore.getState().setLocation({ latitude, longitude });
+//     } catch (error) {
+//       console.log(`GPS error [${count}]:`, error.message);
+//     }
+
+//     // const currentJob = useJobStore.getState().currentJob;
+//     // console.log(`Current Job: ${currentJob ? JSON.stringify(currentJob) : 'No job'}`);
+//     // if (currentJob && !currentJob.jobOpened) {
+//     //   try {
+//     //     console.log(`Opened JobStep screen for job: ${currentJob.id}`);
+//     //     jobStore.setCurrentJob({ ...currentJob, jobOpened: true });
+//     //      navigate('AcceptJobScreen');
+//     //   } catch (err) {
+//     //     console.log('Error opening job step screen:', err.message);
+//     //   }
+//     // }
+//        const { currentJob, jobStatus } = useJobStore.getState();
+
+//        console.log(`Current Job: ${currentJob ? JSON.stringify(currentJob) : 'No job'}`);
+
+//       if (currentJob) {
+//         if (jobStatus === 'arrived') {
+//           console.log('Navigating to JobTrackingScreen because status is arrived');
+//           navigate('JobTrackingScreen');
+//         } else if (!currentJob.jobOpened) {
+//           try {
+//             console.log(`Opened JobStep screen for job: ${currentJob.id}`);
+//             useJobStore.getState().setCurrentJob({ ...currentJob, jobOpened: true });
+//             navigate('AcceptJobScreen');
+//           } catch (err) {
+//             console.log('Error opening job step screen:', err.message);
+//           }
+//         }
+//       }
+
+//     await sleep(delay);
+//   }
+// };
+ 
 const veryIntensiveTask = async (taskDataArguments) => {
   const { delay } = taskDataArguments;
   let count = 0;
 
-  const locationStore = useLocationStore.getState();
-  const jobStore = useJobStore.getState();
-
   while (BackgroundService.isRunning()) {
     count++;
-    
-    
+    let latitudex = null;
+    let longitudex = null;
     try {
       const position = await getCurrentLocation();
       const { latitude, longitude } = position.coords;
-      
-
-      // Save to location store
-      // locationStore.setLocation(latitude, longitude);
-       useLocationStore.getState().setLocation({ latitude, longitude });
+      latitudex = latitude;
+      longitudex = longitude;
+      useLocationStore.getState().setLocation({ latitude, longitude });
     } catch (error) {
       console.log(`GPS error [${count}]:`, error.message);
     }
 
-    const currentJob = useJobStore.getState().currentJob;
-    console.log(`Current Job: ${currentJob ? JSON.stringify(currentJob) : 'No job'}`);
-    if (currentJob && !currentJob.jobOpened) {
-      try {
-        console.log(`Opened JobStep screen for job: ${currentJob.id}`);
-        jobStore.setCurrentJob({ ...currentJob, jobOpened: true });
-         navigate('AcceptJobScreen');
-      } catch (err) {
-        console.log('Error opening job step screen:', err.message);
+    const { currentJob, jobStatus } = useJobStore.getState();
+
+    console.log(`Current Job: ${currentJob ? JSON.stringify(currentJob.coordinateHistory.length) : 'No job'}`);
+ 
+    if (currentJob) {
+      const statusOrder = [
+        'pending',       // 0
+        'accepted',      // 1
+        'on_the_way',    // 2
+        'arrived_ready', // 3
+        'arrived',       // 4
+        'started',       // 5
+        'completed'      // 6
+      ];
+
+      const currentStatusIndex = statusOrder.indexOf(jobStatus);
+      const startedIndex = statusOrder.indexOf('started');
+
+      if (currentStatusIndex !== -1 && currentStatusIndex < startedIndex) {
+        try {
+          console.log(`Navigating to AcceptJobScreen for job: ${currentJob.id}`);
+          useJobStore.getState().setCurrentJob({
+            ...currentJob,
+            jobOpened: true,
+          });
+          navigate('AcceptJobScreen');
+        } catch (err) {
+          console.log('Error opening AcceptJobScreen:', err.message);
+        }
+      } else {
+        if (jobStatus === 'started' ) {
+          const currentRouteName = navigationRef.getCurrentRoute()?.name;
+          //  && !currentJob.navigatedToTracking
+          console.log({ latitude: latitudex, longitude: latitudex, longitudex });
+            useJobStore.getState().addCoordinateToHistory({latitude: latitudex, longitude: latitudex, longitudex});
+          if (currentRouteName !== 'JobTrackingScreen') {
+            console.log('Navigating to JobTrackingScreen because status is arrived');
+            navigate('JobTrackingScreen', { job: currentJob });
+          } else {
+            console.log('Already on JobTrackingScreen, not navigating again');
+          }
+        }
       }
     }
+    // if (currentJob) {
+    //   // Handle navigation to JobTrackingScreen
+     
+    //   const statusOrder = [
+    //     'pending',       // 0
+    //     'accepted',      // 1
+    //     'on_the_way',    // 2
+    //     'arrived_ready', // 3
+    //     'arrived',       // 4
+    //     'started',       // 5
+    //     'completed'      // 6
+    //   ];
+
+    // const currentStatusIndex = statusOrder.indexOf(jobStatus);
+    // const startedIndex = statusOrder.indexOf('started');
+    //     // console.log("started" , currentJob.status)
+    // if (currentStatusIndex !== -1 && currentStatusIndex < startedIndex) {
+    //   // status is before 'started' (including arrived_ready and arrived)
+    //   try {
+    //     console.log(`Navigating to AcceptJobScreen for job: ${currentJob.id}`);
+    //     useJobStore.getState().setCurrentJob({
+    //       ...currentJob,
+    //       jobOpened: true,
+    //     });
+    //     navigate('AcceptJobScreen');
+    //   } catch (err) {
+    //     console.log('Error opening AcceptJobScreen:', err.message);
+    //   }
+    // } else {
+
+    //    if (jobStatus === 'arrived' && !currentJob.navigatedToTracking) {
+    //     console.log('Navigating to JobTrackingScreen because status is arrived');
+    //     navigate('JobTrackingScreen' , { job: currentJob });
+
+      
+    //   }
+
+       
+    // }
+
+    // }
 
     await sleep(delay);
   }
