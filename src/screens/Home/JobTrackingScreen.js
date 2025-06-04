@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback , useContext } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,8 @@ import useLocationStore from '../../store/locationStore';
 import useJobStore from '../../store/jobStore';
 import haversine from 'haversine-distance';
 import { showConfirmationToast, showErrorToast, showInfoToast, showSuccessToast } from '../../utils/showToast';
+import { changeRideStatus } from '../../utils/common';
+import { ShiftContext } from '../../context/ShiftContext';
 
 // Ensure you have a Google Maps API Key for MapViewDirections
 // You can get one from Google Cloud Console
@@ -45,6 +47,7 @@ const JobTrackingScreen = ({ route }) => {
   const latitude = useLocationStore((state) => state.latitude);
   const longitude = useLocationStore((state) => state.longitude);
   const { currentJob, setJobStatus, updateCurrentJob } = useJobStore();
+  const {    driver   } = useContext(ShiftContext);
 
   // Initialize currentJob from initialJob if jobStore is empty or needs to be synced
   useEffect(() => {
@@ -103,15 +106,15 @@ const JobTrackingScreen = ({ route }) => {
         targetLng = currentJob.pickupLng;
       } else if (currentJob.status === 'started') {
         // En route to dropoff
-        targetLat = currentJob.dropoffLat;
-        targetLng = currentJob.dropoffLng;
+        targetLat = currentJob?.dropoffLat;
+        targetLng = currentJob?.dropoffLng;
       } else {
         setEtaToDestination('N/A');
         setDistanceToDestination('N/A');
         return;
       }
 
-      if (targetLat && targetLng) {
+      if (targetLat && targetLng !== null && targetLat !== null ) {
         const distanceMeters = haversine(currentPos, { latitude: targetLat, longitude: targetLng });
         setDistanceToDestination(formatDistance(distanceMeters));
 
@@ -120,6 +123,9 @@ const JobTrackingScreen = ({ route }) => {
         const avgSpeedMps = avgSpeedKmh * 1000 / 3600; // meters per second
         const estimatedSeconds = distanceMeters / avgSpeedMps;
         setEtaToDestination(formatTime(Math.floor(estimatedSeconds)));
+      } else {
+        setDistanceToDestination('N/A');
+        setEtaToDestination('N/A');
       }
     }
   }, [latitude, longitude, currentJob]);
@@ -238,11 +244,13 @@ const handleCancelJob = useCallback(() => {
     message: 'Are you sure you want to cancel this job?',
     confirmText: 'Yes, Cancel',
     cancelText: 'No',
-    onConfirm: () => {
+    onConfirm: async () => {
       clearInterval(timer.current);
       setJobStatus('cancelled');
       updateCurrentJob({ cancelledTime: new Date().toISOString() });
       showErrorToast('Job Cancelled', 'The job has been cancelled.');
+       
+      await changeRideStatus('cancelled', currentJob?.id, driver.driverId, driver.token);
       // You can also add: navigation.navigate('Dashboard') if needed
     },
   });
@@ -253,13 +261,13 @@ const handleCompleteJob = useCallback(() => {
     message: 'Are you sure you want to complete this job?',
     confirmText: 'Confirm',
     cancelText: 'Cancel',
-    onConfirm: () => {
+    onConfirm: async () => {
       clearInterval(timer.current);
       setJobStatus('completed');
       updateCurrentJob({ complete_job_time: new Date().toISOString() });
         
       showSuccessToast('Job Completed', 'The job has been successfully completed.');
-       
+       await changeRideStatus('completed', currentJob?.id, driver.driverId, driver.token);
       // Navigate to a rating/summary screen here
       // navigate('CompleteJobScreen', { job: currentJob });
     },

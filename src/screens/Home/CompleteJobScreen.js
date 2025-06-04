@@ -94,6 +94,7 @@ const CompleteJobScreen = ({ route }) => {
 
       // Alert.alert('Job Completed', 'Thank you for completing the ride!');
       showSuccessToast('Job Completed', 'Thank you for completing the ride!');
+      // await changeRideStatus('completed', currentJob?.id, driver.driverId, driver.token);
       navigation.replace('Home'); // Navigate back to Home screen
     } catch (err) {
       console.error('Error completing job:', err.message);

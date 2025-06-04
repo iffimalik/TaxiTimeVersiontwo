@@ -76,7 +76,7 @@ const [tempVehicleModel, setTempVehicleModel] = useState('');
 
 const { shiftStarted, shiftStartTime, selectedVehicle, shiftCloseTime, startShift, endShift ,  driver , vehicles  } = useContext(ShiftContext);
 const { currentJob, setCurrentJob, setJobStatus, setIsOnline } = useJobStore();
-const { isBackgroundServiceRunning } = useLocationStore();
+const { isBackgroundServiceRunning  , latitude, longitude} = useLocationStore();
   
 
 // Animation value for fade-in effect
@@ -179,13 +179,32 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
         return;
       }
       const job = await CreateJobObject(response[0]);
-      setCurrentJob(job);
+    // await database().ref(`jobs/${job.id}`)
+    //   if (job.id)
+    //     database()
+      //   setCurrentJob(job);
+      checkAndSetJob(job)
     } catch (error) {
       console.error("Error fetching active job:", error.message);
     }
   };
 
-    
+    const checkAndSetJob = async (job) => {
+  if (!job?.id) return;
+
+  try {
+    const snapshot = await database().ref(`jobs/${job.id}`).once('value');
+    if (!snapshot.exists()) {
+      // Job doesn't exist in Firebase, so set current job
+      setCurrentJob(job);
+    } else {
+      // Job exists, skip setting current job
+      console.log(`Job with id ${job.id} already exists in Firebase.`);
+    }
+  } catch (error) {
+    console.error('Error checking job in Firebase:', error);
+  }
+};
       const fetchPreviousJobs = async () => {
     try {
       const response = await api.get(
@@ -351,57 +370,10 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
       });
     };
   };
-const [availableJobs, setAvailableJobs] = useState([
-  { id: 'a1', destination: 'Souq Waqif', pickup: 'Doha Corniche', earning: 'QAR 100', estimatedDuration: '15 mins', distance: '5.2 km', destinationLat: 25.274188294053577, destinationLng: 51.5455120537612, pickupLat: 25.2933, pickupLng: 51.5310 },
-  { id: 'a2', destination: 'Hamad Intl Airport', pickup: 'West Bay', earning: 'QAR 140', estimatedDuration: '25 mins', distance: '12.8 km', destinationLat: 25.274188294053577, destinationLng: 51.5455120537612, pickupLat: 25.3211, pickupLng: 51.5032 },
-  { id: 'a3', destination: 'Aspire Zone', pickup: 'Al Sadd', earning: 'QAR 110', estimatedDuration: '20 mins', distance: '8.5 km', destinationLat: 25.274188294053577, destinationLng: 51.5455120537612, pickupLat: 25.2900, pickupLng: 51.4800 },
-]);
+const [availableJobs, setAvailableJobs] = useState([]);
 
-const [mockPreviousJobs , setMockPreviousJobs] = useState([] );
-   const simulateJob = () => {
-  const fakeJob = {
-    id: 'JOB-2025-001',
-    pickupLocation: 'City Center Mall, Doha',
-    dropoffLocation: 'Education City, Al Rayyan',
-    pickupLat: 25.276987,
-    pickupLng: 51.520008,
-    dropoffLat: 25.319860,
-    dropoffLng: 51.437540,
-    destination: 'Education City',
-    CreatedAt: '2025-05-25T14:30:00+03:00',
-    earningsSoFar: '0.00',
-    pickupTime: '2025-05-25T14:30:00+03:00',
-    dropoffTime: '2025-05-25T15:00:00+03:00',
-    riderName: 'Ahmed Al Thani',
-    riderPhone: '+974 5512 3412',
-    estimatedFare:  '0.00',
-    status: 'pending', // could be: pending, accepted, on_the_way, arrived, started, completed
-    distance: '0.0 km',
-    estimatedDuration: '25 mins',
-    vehicle: {
-      type: 'Sedan',
-      plate: 'QAT-54321',
-      color: 'White',
-      model: 'Toyota Camry 2022',
-    },
-    pickupTime: '2025-05-25T15:00:00+03:00',
-    assignedAt: '2025-05-25T14:45:00+03:00',
-    notes: 'Customer has luggage. Assist if needed.',
-    destinationLat: 25.319860, // Example coordinates
-    destinationLng: 51.437540, // Example coordinates
-    coordinateHistory: [], // Initialize with empty array
-    driver_job_start_time: '2025-05-25T15:00:00+03:00',
-    driver_job_end_time: null, // Will be set when job is completed
-    jobOpened: false,
-    navigatedToTracking: false,
-    distanceTravelled: 0, // Initialize distance travelled`
-  };
+const [mockPreviousJobs , setMockPreviousJobs] = useState([]);
 
-  const { setCurrentJob, setJobStatus , initializeJobFromFirebase  , setIsOnline} = useJobStore.getState();
-
-  setCurrentJob(fakeJob);
-  // setJobStatus(fakeJob.status); // sync store status too
-};
 // --- Initial Setup and Animations ---
 useEffect(() => {
   Animated.timing(fadeAnim, {
@@ -574,7 +546,7 @@ const handleAcceptJob = useCallback((job) => {
 
         showSuccessToast(
           '✅ Job Accepted',
-          `You have accepted the job to ${jobObject.dropoffLocation.address}.`
+          `You have accepted the job to ${jobObject?.dropoffLocation?.address}.`
         );
 
         // navigation.navigate('JobTrackingScreen', { job: jobObject });
@@ -599,6 +571,71 @@ const handleGoToActiveJob = useCallback(() => {
     showInfoToast('No Active Job', 'You do not have an active job currently.');
   }
 }, [currentJob, navigation]);
+
+  
+const CreateNewJob = async () => {
+  try {
+    // Step 1: Try to reverse geocode pickup address
+    let displayName = 'No address found';
+    try {
+      const reverseGeocodeUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`;
+      const response = await fetch(reverseGeocodeUrl, {
+        headers: {
+          'User-Agent': 'YourAppName/1.0 (your@email.com)',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        displayName = data.display_name || displayName;
+      } else {
+        console.warn(`⚠️ Reverse geocode failed: ${response.status}`);
+      }
+    } catch (geoError) {
+      console.warn('⚠️ Reverse geocoding error:', geoError.message);
+    }
+
+    // Step 2: Construct job object
+    const newJobObject = {
+      driverId: driver.driverId,
+      riderId: '929b8f9e-0a3a-49f0-8409-2fef7c6bcd02',
+      pickupLocation: {
+        address: displayName,
+        latitude,
+        longitude,
+      },
+      dropoffLocation: {
+        address: '',
+        latitude: 0,
+        longitude: 0,
+      },
+      tariffId: '6f459a5a-51a9-410e-9239-ddfdb3987d63',
+      passengerCount: 1,
+      bagCount: 0,
+      wheelchairCount: 0,
+      wheelchairAccessNeeded: false,
+      towingOption: false,
+      notes: '',
+      pickupTime: new Date().toISOString(),
+      dropoffTime: '',
+      status:'started'
+    };
+
+    console.log('🆕 New Job Object:', newJobObject);
+
+    // Step 3: Submit job creation request
+    const result = await api.post(JOBENDPOINT.CREATE_RIDE, newJobObject, {
+      Authorization: `Bearer ${driver.token}`,
+    });
+
+    console.log('✅ Job created successfully:', result);
+    await fetchActiveJob();
+  } catch (error) {
+    console.error('❌ Failed to create job:', error.message);
+    showErrorToast('Job Creation Failed', error.message);
+  }
+};
+
 
 // --- Render Logic ---
 const renderJobCard = ({ item }) => (
@@ -705,9 +742,10 @@ return (
         
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Today’s Overview</Text>
-           {/* <TouchableOpacity   onPress={simulateJob}  >
-             <Text style={styles.sectionTitle} >Fake Jobe</Text>
-            </TouchableOpacity> */}
+           <TouchableOpacity  style={[styles.goToJobButton , { backgroundColor: 'red' }]}   onPress={CreateNewJob}  >
+             <Text style={[styles.goToJobButtonText]}  >Create New JOB</Text>
+          </TouchableOpacity>
+           
           <View style={styles.overviewRow}>
             <View style={styles.overviewItem}>
               <Icon name="cash-multiple" size={28} color="#FFD700" />
@@ -802,7 +840,7 @@ return (
                 <View style={styles.previousJobItem}>
                   <View style={styles.previousJobDetails}>
                     <Icon name="flag-checkered" size={20} color="#ADD8E6" />
-                    <Text style={styles.previousJobDestination}>{item.dropoffLocation.address}</Text>
+                    <Text style={styles.previousJobDestination}> {item.pickupLocation?.address} - {item.dropoffLocatio?.address || 'N/A'}</Text>
                   </View>
                   <Text style={styles.previousJobEarnings}>{item.fare}</Text>
                   <Text style={styles.previousJobDate}>{item.createdAt}</Text>
@@ -1281,7 +1319,7 @@ previousJobDetails: {
 },
 previousJobDestination: {
   color: '#fff',
-  fontSize: 16,
+  fontSize: 12,
   fontWeight: 'bold',
 },
 previousJobEarnings: {

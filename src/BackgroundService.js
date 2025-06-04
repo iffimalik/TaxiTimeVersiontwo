@@ -237,7 +237,7 @@ const veryIntensiveTask = async (taskDataArguments) => {
     const startedIndex = statusOrder.indexOf('started');
     const currentRouteName = navigationRef.getCurrentRoute()?.name;
 
-     if (currentStatusIndex !== -1 && currentStatusIndex < startedIndex) {
+        if (currentStatusIndex !== -1 && currentStatusIndex < startedIndex) {
       try {
         // console.log(`Navigating to AcceptJobScreen for job: ${currentJob.id}`);
         updateCurrentJob({ ...currentJob, jobOpened: true });
@@ -248,12 +248,15 @@ const veryIntensiveTask = async (taskDataArguments) => {
     }
 
     // If job is started
-    else if (jobStatus === 'started') {
-      if (latitude && longitude) {
-        updateCurrentJob({ currentLocation: { latitude, longitude } });
-        // console.log(`Current Location: ${latitude}, ${longitude}`);
-        addCoordinateToHistory({ latitude, longitude });
-      }
+        else if (jobStatus === 'started') {
+         if (!currentJob.driver_job_start_time) {
+              updateCurrentJob({ driver_job_start_time:  new Date().toISOString()});
+          }
+          if (latitude && longitude) {
+            updateCurrentJob({ currentLocation: { latitude, longitude } });
+            // console.log(`Current Location: ${latitude}, ${longitude}`);
+            addCoordinateToHistory({ latitude, longitude });
+          }
 
       calculateJobPricing(currentJob);
       updateDistanceTravelled();

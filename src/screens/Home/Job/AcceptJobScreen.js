@@ -108,7 +108,7 @@ const { driver, selectedVehicle } = useContext(ShiftContext);
   }, [currentJob, latitude, longitude]); // Re-fit map if job or location changes
 
   // --- Action Handlers ---
-  const handleAccept = useCallback(() => {
+  const handleAccept = useCallback(async () => {
     LayoutAnimation.easeInEaseOut(); // Animate layout changes
     clearInterval(countdownTimerRef.current); // Stop countdown
     setJobStatus('on_the_way');
@@ -116,28 +116,31 @@ const { driver, selectedVehicle } = useContext(ShiftContext);
     updateCurrentJob({ acceptedTime, status: 'on_the_way' });
     // Alert.alert('✅ Job Accepted', 'You are now on the way to pickup!');
     showSuccessToast('Job Accepted', 'You have accepted the job and are on your way to the pickup location.');
+    await changeRideStatus('accepted', currentJob?.id, driver.driverId, driver.token);
 
   }, [setJobStatus, updateCurrentJob]);
 
-  const handleOnTheWay = useCallback(() => {
+  const handleOnTheWay = useCallback(async () => {
     LayoutAnimation.easeInEaseOut();
     setJobStatus('arrived_ready');
     const onTheWayTime = new Date().toISOString();
     updateCurrentJob({ on_the_way_time: onTheWayTime, status: 'arrived_ready' }); // Corrected status to 'arrived_ready'
     // Alert.alert('Status Updated', 'You are marked as "On the Way".');
     showSuccessToast('On the Way', 'You are now on the way to the pickup location.');
+     await changeRideStatus('on_the_way', currentJob?.id, driver.driverId, driver.token);
   }, [setJobStatus, updateCurrentJob]);
 
-  const handleArrived = useCallback(() => {
+  const handleArrived = useCallback(async () => {
     LayoutAnimation.easeInEaseOut();
     setJobStatus('arrived');
     const arrivedTime = new Date().toISOString();
     updateCurrentJob({ arrivedTime, status: 'arrived' });
     // Alert.alert('Status Updated', 'You have arrived at the pickup location.');
     showSuccessToast('Arrived', 'You have arrived at the pickup location. Please confirm with the rider.');
+    await changeRideStatus('arrived', currentJob?.id, driver.driverId, driver.token);
   }, [setJobStatus, updateCurrentJob]);
 
-  const handleOnStart = useCallback(() => {
+  const handleOnStart = useCallback(async () => {
     LayoutAnimation.easeInEaseOut();
     setJobStatus('started');
     const startedTime = new Date().toISOString();
@@ -146,6 +149,7 @@ const { driver, selectedVehicle } = useContext(ShiftContext);
     // Alert.alert('Ride Started', 'Enjoy the trip!');
      showSuccessToast('Ride Started', 'You have started the ride. Safe travels!');
     navigation.navigate('JobTrackingScreen', { job: currentJob });
+     await changeRideStatus('started', currentJob?.id, driver.driverId, driver.token);
   }, [setJobStatus, updateCurrentJob, navigation, currentJob]);
 
   const handleReject = useCallback(async (auto = false) => {

@@ -92,24 +92,7 @@ const LocationDisplay = () => {
     }
   }, [latitude, longitude, fetchLocationName]);
 
-  // You can add animation to the GIF's container if needed, but the GIF itself is animated.
-  // useEffect(() => {
-  //   Animated.loop(
-  //     Animated.sequence([
-  //       Animated.timing(jumpAnim, {
-  //         toValue: -5,
-  //         duration: 200,
-  //         useNativeDriver: true,
-  //       }),
-  //       Animated.timing(jumpAnim, {
-  //         toValue: 0,
-  //         duration: 200,
-  //         useNativeDriver: true,
-  //       }),
-  //       Animated.delay(1000),
-  //     ])
-  //   ).start();
-  // }, [jumpAnim]);
+  
 
   if (latitude === null || longitude === null) {
     return (
@@ -122,7 +105,7 @@ const LocationDisplay = () => {
 
   return (
     <View style={styles.container}>
-      <MapView
+      <MapView 
         ref={mapRef}
         style={styles.map}
            initialRegion={{
@@ -198,15 +181,20 @@ const LocationDisplay = () => {
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
+    borderRadius: 12,
+    backgroundColor: 'rgba(30,30,30,0.8)',
   },
   map: {
+
+     marginTop: 10,
     width: width - 2 * SPACING_HORIZONTAL,
-    height: height * 0.2,
-    borderRadius: 12,
+    height: height * 0.1,
+    borderRadius: 10,
     marginBottom: 10,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#333',
+    borderWidth: 20,
+    borderColor: 'red',
+    shadowColor: 'white',
   },
   addressContainer: {
     flexDirection: 'row',
