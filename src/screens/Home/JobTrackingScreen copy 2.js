@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
-    Text,
+  Text,
   StatusBar,
   StyleSheet,
   Button,
@@ -9,40 +9,58 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import MapView, { Marker, Polyline } from 'react-native-maps';
-import Location from 'react-native-location';
+import MapView, { Marker } from 'react-native-maps';
 import Vehicle3D from './Vehicle3D';
+import useLocationStore from '../../store/locationStore'; // adjust path
+import useJobStore from '../..//store/jobStore';
+import haversine from 'haversine-distance';
 
-Location.configure({
-  distanceFilter: 5,
-  androidProvider: 'standard',
-  desiredAccuracy: {
-    android: 'highAccuracy',
-    ios: 'bestForNavigation',
-  },
-  interval: 5000,
-  fastestInterval: 2000,
-  maxWaitTime: 10000,
-});
 
 const JobTrackingScreen = ({ route }) => {
   const { job } = route.params || {};
 
-  const [currentPosition, setCurrentPosition] = useState(null);
-  const [distanceTravelled, setDistanceTravelled] = useState(0);
+  const latitude = useLocationStore((state) => state.latitude);
+  const longitude = useLocationStore((state) => state.longitude);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [vehicleHeading, setVehicleHeading] = useState(0);
+ 
+  const { currentJob, setJobStatus, jobStatus, clearJob  , updateCurrentJob } = useJobStore();
+ 
 
-  const locationSubscription = useRef(null);
-  const timer = useRef(null);
-  const currentPositionRef = useRef(null);
   const pickupTime = job?.pickupTime ? new Date(job.pickupTime) : new Date();
+  const currentPositionRef = useRef(null);
+  const timer = useRef(null);
+  const tariff = {
+    StartPrice: 4.0,
+    ForFirst: 1000,
+    DistanceRate: 4.0,
+    PerDistance: 1000,
+    TimeRate: 1.0,
+    PerTime: 60,
+    WaitingRate: 1.0,
+    Perwating: 60
+  };
+
+
+     
 
   useEffect(() => {
-    currentPositionRef.current = currentPosition;
-  }, [currentPosition]);
+    if (!currentJob?.driver_job_start_time) return;
 
-  const haversineDistance = (coords1, coords2) => {
+    const startTime = new Date(currentJob?.driver_job_start_time).getTime();
+
+    // Update elapsed time every second
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const diffSeconds = Math.floor((now - startTime) / 1000);
+      setElapsedTime(diffSeconds);
+   
+    }, 1000);
+     
+    return () => clearInterval(interval);
+  }, [currentJob?.driver_job_start_time]);
+
+    const haversineDistance = (coords1, coords2) => {
     try {
       const toRad = (x) => (x * Math.PI) / 180;
       const R = 6378137;
@@ -61,96 +79,127 @@ const JobTrackingScreen = ({ route }) => {
     }
   };
 
-  const startTracking = async () => {
-    try {
-      const permission = await Location.requestPermission({
-        ios: 'whenInUse',
-        android: { detail: 'fine' },
-      });
+  // useEffect(() => {
+  //   // Set timer for elapsed time
+  //   timer.current = setInterval(() => {
+  //     const secondsPassed = Math.floor((Date.now() - pickupTime.getTime()) / 1000);
+  //     setElapsedTime(secondsPassed);
+  //   }, 1000);
 
-      if (!permission) {
-        Alert.alert('Permission Denied', 'Location access is required.');
-        return;
-      }
-
-      const initialLocation = await Location.getLatestLocation({ timeout: 10000 });
-      if (initialLocation) setCurrentPosition(initialLocation);
-
-      locationSubscription.current = Location.subscribeToLocationUpdates(
-        (locations) => {
-          const newPos = locations[0];
-          if (newPos && newPos.heading !== undefined) {
-            setVehicleHeading(newPos.heading);
-          }
-
-          if (currentPositionRef.current) {
-            const dist = haversineDistance(currentPositionRef.current, newPos);
-            setDistanceTravelled((prev) => prev + dist);
-          }
-
-          setCurrentPosition(newPos);
-        }
-      );
-
-      timer.current = setInterval(() => {
-        const secondsPassed = Math.floor(
-          (Date.now() - pickupTime.getTime()) / 1000
-        );
-        setElapsedTime(secondsPassed);
-      }, 1000);
-    } catch (err) {
-      console.error('startTracking error:', err);
-    }
-  };
-
-  const stopTracking = () => {
-    if (locationSubscription.current) {
-      locationSubscription.current();
-      locationSubscription.current = null;
-    }
-    if (timer.current) {
-      clearInterval(timer.current);
-      timer.current = null;
-    }
-    Alert.alert('Tracking Stopped');
-  };
+  //   return () => {
+  //     clearInterval(timer.current);
+  //   };
+  // }, []);
 
   useEffect(() => {
-    if (!job?.destinationLat || !job?.destinationLng) {
-      Alert.alert('Invalid job data');
-      return;
-    }
-    startTracking();
+    if (!latitude || !longitude) return;
 
-    return () => stopTracking();
-  }, []);
+    const newPos = { latitude, longitude };
 
-  const calculatePrice = () => {
-    const km = distanceTravelled / 1000;
-    const price = km * 1 + (elapsedTime / 60) * 0.5;
-    return price.toFixed(2);
+    // if (currentPositionRef.current) {
+    //   const dist = haversineDistance(currentPositionRef.current, newPos);
+    //   setDistanceTravelled((prev) => prev + dist);
+    // }
+
+    currentPositionRef.current = newPos;
+
+     const latDiff = latitude - currentPositionRef.current.latitude;
+   const lonDiff = longitude - currentPositionRef.current.longitude;
+
+   const heading = Math.atan2(lonDiff, latDiff) * (180 / Math.PI);
+    setVehicleHeading(heading);
+    
+  }, [latitude, longitude]);
+
+  const stopTracking = () => {
+    clearInterval(timer.current);
+    // useLocationStore.getState().setBackgroundServiceRunning(false);
+    setJobStatus('completed');
+      const complete_job_time = new Date().toISOString();
+  // Add acceptedTime to currentJob
+      updateCurrentJob({ complete_job_time });
+    // Alert.alert('Tracking Stopped');
   };
+  const culculatePrice = () => { 
+    const price = culculatePrice1(
+  currentJob.coordinateHistory,
+  currentJob.driver_job_start_time,
+  tariff
+    );
+    return price || '0.00';
 
+  }
+const culculatePrice1 = (coordinateHistory, driverJobStartTime, tariff) => {
+  if (!coordinateHistory || coordinateHistory.length < 2) return tariff?.StartPrice?.toFixed(2) || '0.00';
+
+  // 1. Calculate Total Distance
+  let totalDistanceMeters = 0;
+  for (let i = 1; i < coordinateHistory.length; i++) {
+    const prev = coordinateHistory[i - 1];
+    const curr = coordinateHistory[i];
+
+    totalDistanceMeters += haversine(
+      { lat: prev.latitude, lon: prev.longitude },
+      { lat: curr.latitude, lon: curr.longitude }
+    );
+  }
+
+  // 2. Calculate Elapsed Time in Seconds
+  const jobStartTime = new Date(driverJobStartTime);
+  const now = new Date();
+  const elapsedTimeSeconds = (now - jobStartTime) / 1000;
+
+  // 3. Price Calculation
+  let price = tariff.StartPrice;
+
+  const additionalDistance = Math.max(totalDistanceMeters - tariff.ForFirst, 0);
+  const distanceUnits = additionalDistance / tariff.PerDistance;
+  price += distanceUnits * tariff.DistanceRate;
+
+  const timeUnits = elapsedTimeSeconds / tariff.PerTime;
+  price += timeUnits * tariff.TimeRate;
+
+  return price.toFixed(2);
+};
+
+  const currentPosition = latitude && longitude ? { latitude, longitude } : null;
+ 
+
+  const heading = currentPosition
+    ? Math.atan2(
+        currentPosition.longitude - (currentPositionRef.current?.longitude || longitude),
+        currentPosition.latitude - (currentPositionRef.current?.latitude || latitude)
+      ) * (180 / Math.PI)
+    : 0;
+ 
   return (
     <View style={styles.container}>
       <View style={styles.meterPanel}>
-        <Text style={styles.meterText}>
-          ⏱ {Math.floor(elapsedTime / 60)}m {elapsedTime % 60}s
-          {'  |  '}📍 {(distanceTravelled / 1000).toFixed(2)} km
-          {'  |  '}
-          <Text style={styles.price}>💰 QAR {calculatePrice()}</Text>
-        </Text>
+        <View style={styles.meterBlock}>
+          <Text style={styles.meterLabel}>⏱</Text>
+          <Text style={styles.meterValue}>
+            {Math.floor(elapsedTime / 60)}m {elapsedTime % 60}s
+          </Text>
+        </View>
+
+        <View style={styles.divider} />
+
+        <View style={styles.meterBlock}>
+          <Text style={styles.meterLabel}>📍</Text>
+          <Text style={styles.meterValue}>{( currentJob?.distanceTravelled / 1000).toFixed(2)} km</Text>
+        </View>
+
+        <View style={styles.divider} />
+
+        <View style={[styles.meterBlock, styles.highlightBlock]}>
+          <Text style={styles.meterLabel}>💰</Text>
+          <Text style={[styles.meterValue, styles.price]}>$ {currentJob.earningsSoFar }</Text>
+        </View>
       </View>
 
       {currentPosition ? (
         <MapView
           style={styles.map}
-          initialRegion={{
-            latitude: currentPosition.latitude,
-            longitude: currentPosition.longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          }}
           region={{
             latitude: currentPosition.latitude,
             longitude: currentPosition.longitude,
@@ -159,7 +208,13 @@ const JobTrackingScreen = ({ route }) => {
           }}
           showsUserLocation={true}
         >
-          
+          <Marker
+            coordinate={currentPosition}
+            anchor={{ x: 0.5, y: 0.5 }}
+          >
+            <Vehicle3D color="#FF5722" heading={vehicleHeading} />
+          </Marker>
+
           <Marker
             coordinate={{
               latitude: job.destinationLat,
@@ -168,28 +223,13 @@ const JobTrackingScreen = ({ route }) => {
             title="Drop-Off"
             pinColor="green"
           />
-
-          <Polyline
-            coordinates={[
-              {
-                latitude: currentPosition.latitude,
-                longitude: currentPosition.longitude,
-              },
-              {
-                latitude: job.destinationLat,
-                longitude: job.destinationLng,
-              },
-            ]}
-            strokeColor="#007AFF"
-            strokeWidth={4}
-          />
         </MapView>
       ) : (
         <ActivityIndicator style={{ flex: 1 }} size="large" color="#007AFF" />
       )}
 
       <View style={styles.stopButtonContainer}>
-        <Button title="Stop Tracking" onPress={stopTracking} color="#FF3B30" />
+        <Button title="Complete Job" onPress={stopTracking} color="#FF3B30" />
       </View>
     </View>
   );
@@ -220,7 +260,61 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
     textAlign: 'center',
-  },
+    },
+    meterPanel: {
+  // marginTop: 40,
+  flexDirection: 'row',
+  justifyContent: 'space-around',
+  alignItems: 'center',
+  backgroundColor: 'rgba(20,20,20,0.85)',
+  paddingVertical: 14,
+  paddingHorizontal: 20,
+  borderRadius: 12,
+  marginHorizontal: 15,
+  shadowColor: '#000',
+  shadowOpacity: 0.4,
+  shadowRadius: 10,
+  shadowOffset: { width: 0, height: 5 },
+  elevation: 10,
+},
+
+meterBlock: {
+  alignItems: 'center',
+  flexDirection: 'row',
+  gap: 6,
+},
+
+meterLabel: {
+  fontSize: 20,
+  color: '#ccc',
+},
+
+meterValue: {
+  fontSize: 18,
+  fontWeight: '600',
+  color: '#fff',
+  fontFamily: 'Courier', // gives digital dashboard feel
+},
+
+price: {
+  color: '#00E676', // bright green
+  fontWeight: '700',
+  fontSize: 18,
+},
+
+divider: {
+  width: 1,
+  height: 25,
+  backgroundColor: '#444',
+},
+
+highlightBlock: {
+  backgroundColor: '#121212',
+  paddingHorizontal: 8,
+  paddingVertical: 4,
+  borderRadius: 6,
+},
+
   price: {
     color: '#FFD700',
     fontWeight: 'bold',

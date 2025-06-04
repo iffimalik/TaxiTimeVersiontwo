@@ -11,7 +11,9 @@ import StartShiftScreen from '../screens/Home/StartShiftScreen';
 import JobAcceptScreen from '../screens/Home/Job/AcceptJobScreen';
 
 import { ShiftContext } from '../context/ShiftContext';
-
+import CompleteJobScreen from '../screens/Home/CompleteJobScreen';
+import ChatScreen from '../screens/Chat/ChatScreen';
+import DetailedChatScreen from '../screens/Chat/DetailedChatScreen';
 const Stack = createNativeStackNavigator();
 
 const DriverStack = () => {
@@ -40,7 +42,7 @@ useEffect(() => {
 
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {!user ? (
+      {!user  ? (
         <>
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="Register" component={RegisterScreen} />
@@ -52,6 +54,9 @@ useEffect(() => {
           <Stack.Screen name="Home" component={HomeScreen} />
           <Stack.Screen name="JobTrackingScreen" component={JobTrackingScreen} />
           <Stack.Screen name="AcceptJobScreen" component={JobAcceptScreen} />
+          <Stack.Screen name="CompleteJobScreen" component={CompleteJobScreen} />
+          <Stack.Screen name="ChatScreen" component={ChatScreen} />
+          <Stack.Screen name="DetailedChatScreen" component={DetailedChatScreen} />
           
         </>
       )}

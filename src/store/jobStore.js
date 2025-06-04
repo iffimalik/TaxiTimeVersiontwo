@@ -1,61 +1,133 @@
-// store/jobStore.js
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import React, {  useContext } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import database from '@react-native-firebase/database';
+import NetInfo from '@react-native-community/netinfo';
+import { navigate } from '../navigation/navigationService';
+import { getDriverData } from '../utils/common';
+import { ShiftContext } from '../context/ShiftContext';
 
-const useJobStore = create(
-  persist(
-    (set) => ({
-      currentJob: null,
-      jobStatus: 'pending',
 
-      setCurrentJob: (job) =>
-        set({
-          currentJob: {
-            ...job,
-            coordinateHistory: [], // initialize with empty array
-          },
-        }),
 
-      setJobStatus: (status) => set({ jobStatus: status }),
+const useJobStore = create((set, get) => ({
+  currentJob: null,
+  jobStatus: 'pending',
+  isOnline: true,
 
-      clearJob: () =>
-        set({
-          currentJob: null,
-          jobStatus: 'pending',
-        }),
+  initializeJobFromFirebase: async () => {
+    try {
+      // console.log("calling firewbase");
+      const snapshot = await database().ref('jobs').once('value');
+      const jobs = snapshot.val();
+      if (!jobs) return;
+ 
+      const validJob = Object.values(jobs).find(
+        (job) =>
+          ['pending',  'accepted'  , 'rejected', 'on_the_way', 'arrived_ready' ,  'arrived', 'started' , 'completed' , 'finished','cancelled'].includes(job.status)
+      );
 
-      updateCurrentJob: (updates) =>
-        set((state) => ({
-          currentJob: state.currentJob
-            ? { ...state.currentJob, ...updates }
-            : null,
-        })),
-
-      addCoordinateToHistory: (coord) =>
-        set((state) => {
-          if (!state.currentJob) return {};
-          const newCoord = {
-            ...coord,
-            timestamp: new Date().toISOString(),
-          };
-          const updatedHistory = [
-            ...(state.currentJob.coordinateHistory || []),
-            newCoord,
-          ];
-          return {
-            currentJob: {
-              ...state.currentJob,
-              coordinateHistory: updatedHistory,
-            },
-          };
-        }),
-    }),
-    {
-      name: 'job-storage',
-      getStorage: () => AsyncStorage,
+      if (validJob) {
+        set({ currentJob: validJob, jobStatus: validJob.status });
+        // console.log('✅ Job initialized from Firebase:', validJob);
+      }
+    } catch (error) {
+      console.error('❌ Failed to initialize job from Firebase:', error);
     }
-  )
-);
+  },
+
+  setIsOnline: async (status) => {
+    set({ isOnline: status });
+
+    if (status) {
+      // Push offline job to Firebase
+      const offlineJob = await AsyncStorage.getItem('offlineJob');
+      if (offlineJob) {
+        const parsed = JSON.parse(offlineJob);
+        await database().ref(`jobs/${parsed.id}`).set(parsed);
+        await AsyncStorage.removeItem('offlineJob');
+        set({ currentJob: parsed, jobStatus: parsed.status });
+        // console.log('✅ Flushed offline job to Firebase on reconnect');
+      }
+
+      // Always sync latest from Firebase
+      await get().initializeJobFromFirebase();
+    }
+  },
+
+  setCurrentJob: async (job) => {
+    const fullJob = { ...job, coordinateHistory: job.coordinateHistory || [] };
+    set({ currentJob: fullJob, jobStatus: job.status || 'pending' });
+
+    if (get().isOnline) {
+      await database().ref(`jobs/${job.id}`).set(fullJob);
+    } else {
+      await AsyncStorage.setItem('offlineJob', JSON.stringify(fullJob));
+    }
+  },
+
+  setJobStatus: async (status) => {
+    const job = get().currentJob;
+    if (!job) return;
+
+    const updated = { ...job, status };
+    set({ currentJob: updated, jobStatus: status });
+
+    if (get().isOnline) {
+      await database().ref(`jobs/${job.id}`).set(updated);
+    } else {
+      await AsyncStorage.setItem('offlineJob', JSON.stringify(updated));
+    }
+  },
+
+  clearJob: async () => {
+    const jobId = get().currentJob?.id;
+    set({ currentJob: null, jobStatus: 'pending' });
+
+    if (get().isOnline && jobId) {
+      await database().ref(`jobs/${jobId}`).set(null);
+      
+    }
+
+    await AsyncStorage.removeItem('offlineJob');
+    // console.log('✅ Job cleared from store and Firebase');
+    navigate('Home');
+  },
+
+  updateCurrentJob: async (updates) => {
+    const job = get().currentJob;
+    if (!job) return;
+
+    const updated = { ...job, ...updates };
+    set({ currentJob: updated });
+
+    if (get().isOnline) {
+      await database().ref(`jobs/${updated.id}`).set(updated);
+    } else {
+      await AsyncStorage.setItem('offlineJob', JSON.stringify(updated));
+    }
+  },
+
+  addCoordinateToHistory: async (coord) => {
+    const job = get().currentJob;
+    if (!job) return;
+
+    const updated = {
+      ...job,
+      coordinateHistory: [...(job.coordinateHistory || []), {
+        ...coord,
+        timestamp: new Date().toISOString(),
+      }],
+    };
+
+    set({ currentJob: updated });
+      // console.log('Adding coordinate to history:', get().isOnline);
+    if (get().isOnline) {
+      await database().ref(`jobs/${updated.id}`).set(updated);
+    } else {
+      await AsyncStorage.setItem('offlineJob', JSON.stringify(updated));
+    }
+  },
+  
+}));
 
 export default useJobStore;

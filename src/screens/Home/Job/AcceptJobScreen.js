@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo , useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback  , useContext} from 'react';
 import {
   View,
   Text,
@@ -7,368 +7,762 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
+  Dimensions, // For responsiveness
+  Animated,   // For animations
+  LayoutAnimation, // For subtle layout changes
+  UIManager, // For LayoutAnimation on Android
+  ActivityIndicator
 } from 'react-native';
- import MapView, { Marker, Polyline } from 'react-native-maps';
+import Toast from 'react-native-toast-message';
+import {
+  showSuccessToast,
+  showErrorToast,
+  showInfoToast,
+  showConfirmationToast,
+} from '../../../utils/showToast'; // Adjust path as needed
+
+ 
+import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapViewDirections from 'react-native-maps-directions'; // Import MapViewDirections
 import { useNavigation } from '@react-navigation/native';
 import useJobStore from '../../../store/jobStore';
 import useLocationStore from '../../../store/locationStore';
 import haversine from 'haversine-distance';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons'; // Using MaterialCommunityIcons for icons
+import { changeRideStatus, shiftStatusChange } from  '../../../utils/common';
+import { ShiftContext } from '../../../context/ShiftContext';
+
+if (Platform.OS === 'android') {
+  if (UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+  }
+}
+
+// Get screen dimensions for responsiveness
+const { width, height } = Dimensions.get('window');
+const SPACING = width * 0.05; // 5% of screen width for general spacing
+const MAP_HEIGHT = height * 0.35; // 35% of screen height for the map
+
+// Ensure you have a Google Maps API Key for MapViewDirections
+const GOOGLE_MAPS_APIKEY = 'AIzaSyBhcA7J8ZefAwlzhuYUNDIf_W3Yzy_16gA'; // <<< IMPORTANT: Replace with your actual API Key
 
 const AcceptJobScreen = () => {
   const navigation = useNavigation();
-const { currentJob, setJobStatus, jobStatus, clearJob  , updateCurrentJob } = useJobStore();
+  const { currentJob, setJobStatus, jobStatus, clearJob, updateCurrentJob , changeJobStatus } = useJobStore();
+const { driver, selectedVehicle } = useContext(ShiftContext);
+
+  // console.log("jobStatus" , jobStatus);
   const { latitude, longitude } = useLocationStore();
   const [counter, setCounter] = useState(30);
-const mapRef = useRef(null);
+  const mapRef = useRef(null);
+  const countdownTimerRef = useRef(null);
+  const fadeAnim = useRef(new Animated.Value(0)).current; // For fade-in animation
+
+  // --- Initial Setup and Animations ---
   useEffect(() => {
-     if (!currentJob || !latitude || !longitude) return;
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 800,
+      useNativeDriver: true,
+    }).start();
 
-  const timeout = setTimeout(() => {
-    mapRef.current?.fitToCoordinates(
-      [
-        { latitude, longitude }, // Driver's current location
-        { latitude: currentJob.pickupLat, longitude: currentJob.pickupLng } // Pickup location
-      ],
-      {
-        edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
-        animated: true,
-      }
-    );
-  }, 500);
-
-    const timer = setInterval(() => {
-      setCounter((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          // You can uncomment the next line if you want auto reject on timeout
-          // handleReject(true);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [currentJob]);
-const handleAccept = () => {
-  // Alert.alert('✅ Job Accepted');
-  setJobStatus('on_the_way');
-  const acceptedTime = new Date().toISOString();
-  // Add acceptedTime to currentJob
-  updateCurrentJob({ acceptedTime });
-};
-
-// On the Way → Sets arrived status
-const handleOnTheWay = () => {
-  setJobStatus('arrived_ready'); // Not yet arrived
-    const on_the_way = new Date().toISOString();
-  // Add acceptedTime to currentJob
-  updateCurrentJob({ on_the_way_time: on_the_way });
-};
-
-// Arrived (when within 300m)
-const handleArrived = () => {
-  setJobStatus('arrived');
-   const arrived = new Date().toISOString();
-  // Add acceptedTime to currentJob
-  updateCurrentJob({ arrivedTime: arrived });
-};
-  
-  const handleOnStart = () => {
-    setJobStatus('started');
-    const started = new Date().toISOString();
-    // Add acceptedTime to currentJob
-    updateCurrentJob({ driver_job_start_time: started });
-    navigation.navigate('JobTrackingScreen', { job: currentJob });
-    
-};
-  
- 
-// Check if within 300m
-const isNearby = () => {
-  const distance = haversine({ latitude, longitude }, {
-              latitude: currentJob.pickupLat,
-              longitude: currentJob.pickupLng,
-            }); // in meters
-  return distance <= 9509; // 4509 meters = 4.5 km
-};
-  // Create an arc-shaped coordinate array for the Polyline
-  function createArcCoordinates(start, end, height = -0.01, points = 30) {
-    const coords = [];
-
-    for (let i = 0; i <= points; i++) {
-      const t = i / points;
-
-      // Linear interpolation between start and end
-      const lat = start.latitude + (end.latitude - start.latitude) * t;
-      const lng = start.longitude + (end.longitude - start.longitude) * t;
-
-      // Parabolic height offset for arc (peak at midpoint)
-      const arcHeight = height * 4 * (t - 0.5) * (t - 0.5) - height;
-
-      coords.push({
-        latitude: lat + arcHeight,
-        longitude: lng,
-      });
+    // Start countdown timer for 'pending' status
+    if (jobStatus === 'pending') {
+      countdownTimerRef.current = setInterval(() => {
+        setCounter((prev) => {
+          if (prev <= 1) {
+            clearInterval(countdownTimerRef.current);
+            handleReject(true); // Auto reject on timeout
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      clearInterval(countdownTimerRef.current); // Clear timer if not pending
     }
-    return coords;
+
+
+    return () => clearInterval(countdownTimerRef.current); // Cleanup timer on unmount
+  }, [fadeAnim, jobStatus]); // Depend on fadeAnim to start animation, and jobStatus to control timer
+
+  // --- Map Fitting Logic ---
+  useEffect(() => {
+    if (!currentJob || !latitude || !longitude || !mapRef.current) return;
+
+    // Use a timeout to ensure map is rendered before fitting to coordinates
+    const mapFitTimeout = setTimeout(() => {
+      mapRef.current?.fitToCoordinates(
+        [
+          { latitude, longitude }, // Driver's current location
+          { latitude: currentJob.pickupLat, longitude: currentJob.pickupLng } // Pickup location
+        ],
+        {
+          edgePadding: { top: 100, right: 50, bottom: 50, left: 50 }, // More padding for better view
+          animated: true,
+        }
+      );
+    }, 1000); // Give map a bit more time to render
+
+    return () => clearTimeout(mapFitTimeout);
+  }, [currentJob, latitude, longitude]); // Re-fit map if job or location changes
+
+  // --- Action Handlers ---
+  const handleAccept = useCallback(() => {
+    LayoutAnimation.easeInEaseOut(); // Animate layout changes
+    clearInterval(countdownTimerRef.current); // Stop countdown
+    setJobStatus('on_the_way');
+    const acceptedTime = new Date().toISOString();
+    updateCurrentJob({ acceptedTime, status: 'on_the_way' });
+    // Alert.alert('✅ Job Accepted', 'You are now on the way to pickup!');
+    showSuccessToast('Job Accepted', 'You have accepted the job and are on your way to the pickup location.');
+
+  }, [setJobStatus, updateCurrentJob]);
+
+  const handleOnTheWay = useCallback(() => {
+    LayoutAnimation.easeInEaseOut();
+    setJobStatus('arrived_ready');
+    const onTheWayTime = new Date().toISOString();
+    updateCurrentJob({ on_the_way_time: onTheWayTime, status: 'arrived_ready' }); // Corrected status to 'arrived_ready'
+    // Alert.alert('Status Updated', 'You are marked as "On the Way".');
+    showSuccessToast('On the Way', 'You are now on the way to the pickup location.');
+  }, [setJobStatus, updateCurrentJob]);
+
+  const handleArrived = useCallback(() => {
+    LayoutAnimation.easeInEaseOut();
+    setJobStatus('arrived');
+    const arrivedTime = new Date().toISOString();
+    updateCurrentJob({ arrivedTime, status: 'arrived' });
+    // Alert.alert('Status Updated', 'You have arrived at the pickup location.');
+    showSuccessToast('Arrived', 'You have arrived at the pickup location. Please confirm with the rider.');
+  }, [setJobStatus, updateCurrentJob]);
+
+  const handleOnStart = useCallback(() => {
+    LayoutAnimation.easeInEaseOut();
+    setJobStatus('started');
+    const startedTime = new Date().toISOString();
+    updateCurrentJob({ driver_job_start_time: startedTime, status: 'started' });
+    setJobStatus('started');
+    // Alert.alert('Ride Started', 'Enjoy the trip!');
+     showSuccessToast('Ride Started', 'You have started the ride. Safe travels!');
+    navigation.navigate('JobTrackingScreen', { job: currentJob });
+  }, [setJobStatus, updateCurrentJob, navigation, currentJob]);
+
+  const handleReject = useCallback(async (auto = false) => {
+    LayoutAnimation.easeInEaseOut();
+    clearInterval(countdownTimerRef.current); // Stop countdown
+    if (!auto) {
+      // Alert.alert('❌ Job Rejected', 'You rejected the job.');
+           showErrorToast('Job Rejected', 'You have rejected the job. It will be offered to another driver.');
+        
+    } else {
+      // Alert.alert('⏱️ Timed Out', 'You didn’t respond in time. Job rejected.');
+      showErrorToast('Job Rejected', 'You did not respond in time. The job has been automatically rejected.');
+    }
+    setJobStatus('rejected'); // Set status to rejected
+    await changeRideStatus('rejected', currentJob?.id, driver.driverId, driver.token);
+    updateCurrentJob({ rejectedTime: new Date().toISOString(), status: 'rejected' }); // Update job in store
+    clearJob(); // Clear current job from store
+    // navigation.navigate('Home'); // Navigate back to Home
+  }, [clearJob, navigation, setJobStatus, updateCurrentJob ]);
+
+  // --- Distance Check for "Arrived" Button ---
+  const isNearby = useMemo(() => {
+    if (!latitude || !longitude || !currentJob?.pickupLat || !currentJob?.pickupLng) return false;
+    const distance = haversine(
+      { latitude, longitude },
+      { latitude: currentJob.pickupLat, longitude: currentJob.pickupLng }
+    ); // in meters
+    const PROXIMITY_THRESHOLD = 20000999; // meters (e.g., within 200m of pickup)
+    return distance <= PROXIMITY_THRESHOLD;
+  }, [latitude, longitude, currentJob?.pickupLat, currentJob?.pickupLng]);
+
+  // Render nothing if job data or location is missing
+  if (!currentJob || !currentJob.id || latitude === null || longitude === null) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#FF5722" />
+        <Text style={styles.loadingText}>Waiting for new job or GPS signal...</Text>
+      </View>
+    );
   }
 
-  if (!currentJob || !latitude || !longitude) return null;
+  const driverCoords = { latitude, longitude };
+  const pickupCoords = { latitude: currentJob.pickupLat, longitude: currentJob.pickupLng };
+  const dropoffCoords = { latitude: currentJob.dropoffLat, longitude: currentJob.dropoffLng };
 
-  const start = { latitude, longitude };
-  const end = { latitude: currentJob.pickupLat, longitude: currentJob.pickupLng };
-  const arcCoordinates = useMemo(() => createArcCoordinates(start, end), [start, end]);
-
-//   const handleAccept = () => {
-//     Alert.alert('✅ Job Accepted', `Job ID: ${currentJob.id}`);
-//     navigation.navigate('JobTrackingScreen');
-//   };
-
-  const handleReject = (auto = false) => {
-    if (!auto) {
-      Alert.alert('❌ Job Rejected', 'You rejected the job.');
-    } else {
-      Alert.alert('⏱️ Timed Out', 'You didn’t respond in time.');
-    }
-    clearJob();
-    navigation.navigate('Home');
-  };
+  const formatCurrency = (amount) => `QAR ${parseFloat(amount).toFixed(2)}`;
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>🚖 New Ride Request</Text>
-      <Text style={styles.counter}>Auto rejecting in {counter}s</Text>
+    <Animated.ScrollView contentContainerStyle={styles.container} style={{ opacity: fadeAnim }}>
+      <StatusBar barStyle="light-content" backgroundColor="#121212" />
 
+      {/* Header with Title and Countdown */}
+      <View style={styles.header}>
+        <Text style={styles.title}>🚖 New Ride Request</Text>
+        {jobStatus === 'pending' && (
+          <View style={styles.countdownContainer}>
+            <Icon name="timer-sand" size={20} color="#FFD700" />
+            <Text style={styles.counterText}>Auto reject in {counter}s</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Map View */}
       <View style={styles.mapContainer}>
         <MapView
-           ref={mapRef}
-            style={styles.map}
-            initialRegion={{
-                latitude,
-                longitude,
-                latitudeDelta: 0.02,
-                longitudeDelta: 0.02,
-            }}
+          ref={mapRef}
+          style={styles.map}
+          initialRegion={{
+            latitude: driverCoords.latitude,
+            longitude: driverCoords.longitude,
+            latitudeDelta: 0.02,
+            longitudeDelta: 0.02,
+          }}
+          showsUserLocation={false} // Use custom marker for driver
+          customMapStyle={mapStyle} // Apply dark map style
         >
-          {/* Driver Location */}
+          {/* Driver Location Marker */}
           <Marker
-            coordinate={{ latitude, longitude }}
+            coordinate={driverCoords}
             title="Your Location"
-            pinColor="blue"
-          />
+            anchor={{ x: 0.5, y: 0.5 }}
+          >
+            <View style={styles.driverMarker}>
+              <Icon name="car-side" size={28} color="#2196F3" />
+            </View>
+          </Marker>
 
           {/* Pickup Marker */}
           <Marker
-            coordinate={{
-              latitude: currentJob.pickupLat,
-              longitude: currentJob.pickupLng,
-            }}
+            coordinate={pickupCoords}
             title="Pickup Location"
             description={currentJob.pickupLocation}
             pinColor="green"
-          />
+          >
+            <Icon name="map-marker-radius" size={30} color="#4CAF50" />
+          </Marker>
 
-          {/* Arc Polyline */}
-          <Polyline
-            coordinates={arcCoordinates}
-            strokeColor="#1abc9c"
-            strokeWidth={3}
-            geodesic={false} // geodesic false because you're manually creating the arc
-          />
+          {/* Route from Driver to Pickup */}
+          {/* <MapViewDirections
+            origin={driverCoords}
+            destination={pickupCoords}
+            apikey={GOOGLE_MAPS_APIKEY}
+            strokeWidth={4}
+            strokeColor="#4CAF50" // Green for pickup route
+            lineDashpattern={[10, 5]} // Dashed line
+            onReady={(result) => {
+              // Optionally update ETA/distance based on Google Directions API
+              // console.log(`Route Distance: ${result.distance} km`);
+              // console.log(`Route Duration: ${result.duration} mins`);
+            }}
+            onError={(errorMessage) => {
+              console.error('MapViewDirections Error:', errorMessage);
+              Alert.alert('Map Error', 'Could not load directions. Check API key or network.');
+            }}
+          /> */}
         </MapView>
       </View>
-
-      <View style={styles.card}>
-        <LabelValue label="Pickup" value={currentJob.pickupLocation} />
-        <LabelValue label="Dropoff" value={currentJob.dropoffLocation} />
-        <View style={styles.row}>
-          <Badge text={`Distance: ${currentJob.distance}`} />
-          <Badge text={`ETA: ${currentJob.estimatedDuration}`} />
-        </View>
-        <LabelValue label="Fare" value={`QAR ${currentJob.estimatedFare}`} />
-        <LabelValue
-          label="Rider"
-          value={`${currentJob.riderName} (${currentJob.riderPhone})`}
-        />
-        <LabelValue
-          label="Vehicle"
-          value={`${currentJob.vehicle.color} ${currentJob.vehicle.model} (${currentJob.vehicle.plate})`}
-        />
-        {currentJob.notes && <LabelValue label="Notes" value={currentJob.notes} />}
-      </View>
-
-     <View style={styles.buttonContainer}>
-        {jobStatus === 'pending' && (
-            <>
-            <TouchableOpacity style={styles.acceptBtn} onPress={handleAccept}>
-                <Text style={styles.btnText}>✅ Accept</Text>
+ {/* Dynamic Action Buttons */}
+      <View style={styles.buttonContainer}>
+        {jobStatus === 'pending' || jobStatus == 'accepted' && (
+          <>
+            <TouchableOpacity style={[styles.actionBtn, styles.acceptBtn]} onPress={handleAccept} activeOpacity={0.7}>
+              <Icon name="check-circle-outline" size={24} color="#fff" />
+              <Text style={styles.btnText}>Accept</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.rejectBtn} onPress={() => handleReject(false)}>
-                <Text style={styles.btnText}>❌ Reject</Text>
+            <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={async () => {
+                  await changeRideStatus('rejected', currentJob?.id, driver.driverId, driver.token);
+                 handleReject(false)
+               // Update job status in backend
+            }} activeOpacity={0.7}>
+              <Icon name="close-circle-outline" size={24} color="#fff" />
+              <Text style={styles.btnText}>Reject</Text>
             </TouchableOpacity>
-            </>
+          </>
         )}
 
         {jobStatus === 'on_the_way' && (
-            <TouchableOpacity style={styles.acceptBtn} onPress={handleOnTheWay}>
-            <Text style={styles.btnText}>🚗 On the Way</Text>
-            </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, styles.primaryBtn]} onPress={handleOnTheWay} activeOpacity={0.7}>
+            <Icon name="car-side" size={24} color="#fff" />
+            <Text style={styles.btnText}>On the Way</Text>
+          </TouchableOpacity>
         )}
-        
+
         {jobStatus === 'arrived_ready' && (
           <TouchableOpacity
             style={[
-              { width: '100%',
-              height: 50},
-              styles.acceptBtn,
-              !(jobStatus === 'arrived_ready' && isNearby()) && styles.disabledBtn
+              styles.actionBtn,
+              styles.primaryBtn,
+              !isNearby && styles.disabledBtn // Apply disabled style if not nearby
             ]}
             onPress={handleArrived}
-            disabled={!(jobStatus === 'arrived_ready' && isNearby())}
+            disabled={!isNearby} // Disable button if not nearby
+            activeOpacity={0.7}
           >
-            <Text
-              style={[
-                styles.btnText,
-                !(jobStatus === 'arrived_ready' && isNearby()) && styles.disabledText
-              ]}
-            >
-              📍 Arrived
+            <Icon name="map-marker-check" size={24} color={!isNearby ? '#888' : '#fff'} />
+            <Text style={[styles.btnText, !isNearby && styles.disabledText]}>
+              Arrived {isNearby ? '' : `(${Math.round(haversine(driverCoords, pickupCoords))}m)`}
             </Text>
           </TouchableOpacity>
         )}
-         {jobStatus === 'arrived' && (
-            <TouchableOpacity style={styles.acceptBtn} onPress={handleOnStart}>
-            <Text style={styles.btnText}>🚗 Start</Text>
-            </TouchableOpacity>
+
+        {jobStatus === 'arrived' && (
+          <TouchableOpacity style={[styles.actionBtn, styles.primaryBtn]} onPress={handleOnStart} activeOpacity={0.7}>
+            <Icon name="play-circle-outline" size={24} color="#fff" />
+            <Text style={styles.btnText}>Start Ride</Text>
+          </TouchableOpacity>
         )}
-        
+      </View>
+      {/* Job Details Card */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Trip Details</Text>
+          <Text style={styles.fareValue}>{formatCurrency(currentJob.estimatedFare)}</Text>
         </View>
 
-    </ScrollView>
+        <LabelValue icon="map-marker-outline" label="Pickup" value={currentJob.pickupLocation} color="#4CAF50" />
+        <LabelValue icon="flag-checkered" label="Dropoff" value={currentJob.dropoffLocation} color="#FF5722" />
+
+        <View style={styles.rowMetrics}>
+          <Badge icon="map-marker-distance" text={`Distance: ${currentJob.distance}`} />
+          <Badge icon="clock-outline" text={`ETA: ${currentJob.estimatedDuration}`} />
+        </View>
+
+        <View style={styles.divider} />
+
+        <LabelValue icon="account-circle" label="Rider" value={currentJob.riderName} />
+        <LabelValue icon="phone" label="Contact" value={currentJob.riderPhone} />
+        <LabelValue icon="car" label="Vehicle" value={`${currentJob.vehicle.model} (${currentJob.vehicle.plate})`} />
+
+        {currentJob.notes && (
+          <View style={styles.notesSection}>
+            <Icon name="note-text-outline" size={20} color="#FFD700" />
+            <Text style={styles.notesText}>{currentJob.notes}</Text>
+          </View>
+        )}
+      </View>
+
+     
+    </Animated.ScrollView>
   );
 };
 
-const LabelValue = ({ label, value }) => (
-  <View style={styles.section}>
-    <Text style={styles.label}>{label}</Text>
-    <Text style={styles.value}>{value}</Text>
+// Helper Components for cleaner rendering
+const LabelValue = ({ icon, label, value, color }) => (
+  <View style={styles.sectionItem}>
+    <Icon name={icon} size={20} color={color || '#ADD8E6'} />
+    <View>
+      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.value}>{value}</Text>
+    </View>
   </View>
 );
 
-const Badge = ({ text }) => (
-  <Text style={styles.badge}>{text}</Text>
+const Badge = ({ icon, text }) => (
+  <View style={styles.badgeContainer}>
+    <Icon name={icon} size={16} color="#ADD8E6" />
+    <Text style={styles.badgeText}>{text}</Text>
+  </View>
 );
 
 export default AcceptJobScreen;
 
+const mapStyle = [
+  // Dark map style JSON (from previous JobTrackingScreen, kept for consistency if needed elsewhere)
+  { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#242f3e' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
+  {
+    featureType: 'administrative.locality',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#d59563' }],
+  },
+  {
+    featureType: 'poi',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#d59563' }],
+  },
+  {
+    featureType: 'poi.park',
+    elementType: 'geometry',
+    stylers: [{ color: '#263c3f' }],
+  },
+  {
+    featureType: 'poi.park',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#6b9a76' }],
+  },
+  {
+    featureType: 'road',
+    elementType: 'geometry',
+    stylers: [{ color: '#38414e' }],
+  },
+  {
+    featureType: 'road',
+    elementType: 'geometry.stroke',
+    stylers: [{ color: '#212a37' }],
+  },
+  {
+    featureType: 'road',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#9ca5b3' }],
+  },
+  {
+    featureType: 'road.highway',
+    elementType: 'geometry',
+    stylers: [{ color: '#746855' }],
+  },
+  {
+    featureType: 'road.highway',
+    elementType: 'geometry.stroke',
+    stylers: [{ color: '#1f2835' }],
+  },
+  {
+    featureType: 'road.highway',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#f3d19c' }],
+  },
+  {
+    featureType: 'transit',
+    elementType: 'geometry',
+    stylers: [{ color: '#2f3948' }],
+  },
+  {
+    featureType: 'transit.station',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#d59563' }],
+  },
+  {
+    featureType: 'water',
+    elementType: 'geometry',
+    stylers: [{ color: '#17263c' }],
+  },
+  {
+    featureType: 'water',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#515c6d' }],
+  },
+  {
+    featureType: 'water',
+    elementType: 'labels.text.stroke',
+    stylers: [{ color: '#17263c' }],
+  },
+];
+
+
 const styles = StyleSheet.create({
   container: {
-    padding: 20,
-    marginTop: StatusBar.currentHeight ? StatusBar.currentHeight + 10 : 30,
-    backgroundColor: '#f9f9fb',
+    marginTop: StatusBar.currentHeight || 0, // Adjust for status bar height
+    flexGrow: 1,
+    backgroundColor: '#1a1a1a', // Dark background
+    paddingBottom: SPACING,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+  },
+  loadingText: {
+    color: '#fff',
+    marginTop: 10,
+    fontSize: 16,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING, // Use consistent spacing
+    paddingVertical: 15,
+    backgroundColor: '#121212',
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
   },
   title: {
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: '700',
     textAlign: 'center',
-    color: '#2c3e50',
-    marginBottom: 8,
+    color: '#fff',
+    flex: 1, // Allow title to take space
   },
-  acceptBtn: {
-  backgroundColor: '#2E86DE', // Active blue
-  padding: 14,
-  borderRadius: 10,
-  alignItems: 'center',
-  marginVertical: 10,
-},
-
-btnText: {
-  color: '#fff',
-  fontWeight: 'bold',
-  fontSize: 16,
-},
-
-disabledBtn: {
-  backgroundColor: '#ccc', // dull grey
-  opacity: 0.7,
-},
-
-disabledText: {
-  color: "#888", // faded text color
-}
-,
-  counter: {
+  countdownContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,215,0,0.1)', // Gold transparent background
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#FFD700',
+    marginLeft: 10,
+  },
+  counterText: {
     fontSize: 14,
-    textAlign: 'center',
-    color: '#e74c3c',
-    marginBottom: 16,
+    color: '#FFD700',
+    fontWeight: 'bold',
+    marginLeft: 5,
   },
   mapContainer: {
-    height: 240,
-    borderRadius: 12,
+    height: MAP_HEIGHT,
+    marginHorizontal: SPACING,
+    borderRadius: 15,
     overflow: 'hidden',
-    marginBottom: 20,
+    marginTop: SPACING,
+    borderWidth: 2,
+    borderColor: '#333',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.6,
+    shadowRadius: 15,
+    elevation: 15,
   },
   map: {
     width: '100%',
     height: '100%',
   },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
+  driverMarker: {
+    backgroundColor: 'rgba(33,150,243,0.2)', // Blue transparent background
+    padding: 8,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: '#2196F3', // Solid blue border
+    shadowColor: '#2196F3',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
     shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    elevation: 10,
   },
-  section: {
-    marginBottom: 12,
+  card: {
+    backgroundColor: 'rgba(25,25,25,0.95)',
+    borderRadius: 15,
+    padding: SPACING,
+    marginHorizontal: SPACING,
+    marginTop: SPACING,
+    shadowColor: '#000',
+    shadowOpacity: 0.5,
+    shadowRadius: 15,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 15,
+    borderLeftWidth: 5,
+    borderLeftColor: '#FFD700', // Gold accent
   },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#7f8c8d',
-    marginBottom: 2,
-  },
-  value: {
-    fontSize: 15,
-    color: '#2c3e50',
-  },
-  row: {
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    alignItems: 'center',
+    marginBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+    paddingBottom: 10,
   },
-  badge: {
-    backgroundColor: '#ecf0f1',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
+  cardTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  fareValue: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#FFD700',
+  },
+  sectionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 12,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ccc',
+    width: 70, // Fixed width for labels for alignment
+  },
+  value: {
+    fontSize: 16,
+    color: '#fff',
+    flex: 1, // Allow value text to wrap
+  },
+  rowMetrics: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginVertical: 10,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(50,50,50,0.5)',
+    borderRadius: 10,
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(173,216,230,0.1)', // Light blue transparent
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 5,
+    borderWidth: 1,
+    borderColor: '#ADD8E6',
+  },
+  badgeText: {
     fontSize: 13,
-    color: '#34495e',
+    color: '#ADD8E6',
+    fontWeight: '600',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#333',
+    marginVertical: 15,
+  },
+  notesSection: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 15,
+    padding: 12,
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    borderRadius: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: '#FFD700',
+    gap: 10,
+  },
+  notesText: {
+    color: '#FFD700',
+    fontSize: 14,
+    fontStyle: 'italic',
+    flex: 1,
   },
   buttonContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-evenly',
-    marginTop: 10,
+    justifyContent: 'space-around',
+    padding: SPACING,
+    backgroundColor: '#121212',
+    borderTopWidth: 1,
+    borderTopColor: '#333',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 15,
+    borderRadius: 30,
+    marginHorizontal: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
+    elevation: 8,
+    gap: 10,
   },
   acceptBtn: {
-    backgroundColor: '#27ae60',
-    paddingVertical: 14,
-    paddingHorizontal: 30,
-    borderRadius: 10,
-    alignItems: 'center',
+    backgroundColor: '#4CAF50', // Green
   },
   rejectBtn: {
-    backgroundColor: '#c0392b',
-    paddingVertical: 14,
-    paddingHorizontal: 30,
-    borderRadius: 10,
-    alignItems: 'center',
+    backgroundColor: '#FF5722', // Red
   },
-  
+  primaryBtn: {
+    backgroundColor: '#2196F3', // Blue
+  },
+  btnText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 17,
+  },
+  disabledBtn: {
+    backgroundColor: '#607D8B', // Grey-blue
+    opacity: 0.7,
+  },
+  disabledText: {
+    color: '#bbb',
+  },
 });
+
+// // Dark map style JSON (reused from JobTrackingScreen for consistency)
+// const mapStyle = [
+//   { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
+//   { elementType: 'labels.text.stroke', stylers: [{ color: '#242f3e' }] },
+//   { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
+//   {
+//     featureType: 'administrative.locality',
+//     elementType: 'labels.text.fill',
+//     stylers: [{ color: '#d59563' }],
+//   },
+//   {
+//     featureType: 'poi',
+//     elementType: 'labels.text.fill',
+//     stylers: [{ color: '#d59563' }],
+//   },
+//   {
+//     featureType: 'poi.park',
+//     elementType: 'geometry',
+//     stylers: [{ color: '#263c3f' }],
+//   },
+//   {
+//     featureType: 'poi.park',
+//     elementType: 'labels.text.fill',
+//     stylers: [{ color: '#6b9a76' }],
+//   },
+//   {
+//     featureType: 'road',
+//     elementType: 'geometry',
+//     stylers: [{ color: '#38414e' }],
+//   },
+//   {
+//     featureType: 'road',
+//     elementType: 'geometry.stroke',
+//     stylers: [{ color: '#212a37' }],
+//   },
+//   {
+//     featureType: 'road',
+//     elementType: 'labels.text.fill',
+//     stylers: [{ color: '#9ca5b3' }],
+//   },
+//   {
+//     featureType: 'road.highway',
+//     elementType: 'geometry',
+//     stylers: [{ color: '#746855' }],
+//   },
+//   {
+//     featureType: 'road.highway',
+//     elementType: 'geometry.stroke',
+//     stylers: [{ color: '#1f2835' }],
+//   },
+//   {
+//     featureType: 'road.highway',
+//     elementType: 'labels.text.fill',
+//     stylers: [{ color: '#f3d19c' }],
+//   },
+//   {
+//     featureType: 'transit',
+//     elementType: 'geometry',
+//     stylers: [{ color: '#2f3948' }],
+//   },
+//   {
+//     featureType: 'transit.station',
+//     elementType: 'labels.text.fill',
+//     stylers: [{ color: '#d59563' }],
+//   },
+//   {
+//     featureType: 'water',
+//     elementType: 'geometry',
+//     stylers: [{ color: '#17263c' }],
+//   },
+//   {
+//     featureType: 'water',
+//     elementType: 'labels.text.fill',
+//     stylers: [{ color: '#515c6d' }],
+//   },
+//   {
+//     featureType: 'water',
+//     elementType: 'labels.text.stroke',
+//     stylers: [{ color: '#17263c' }],
+//   },
+// ];

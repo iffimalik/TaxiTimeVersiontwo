@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useContext, use } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useContext } from 'react';
 import {
 Text,
 StyleSheet,
@@ -31,16 +31,7 @@ import LocationDisplay from './HomeComponent/LocationDisplay'; // Assuming this 
 import CurrentAddress from './HomeComponent/CurrentAddress'; // Assuming this component exists
 import { useNavigation } from '@react-navigation/native'; // For navigation
 import { showConfirmationToast, showInfoToast, showSuccessToast  , showErrorToast} from '../../utils/showToast';
-//  import messageSound from '../../assets/sound/whatsapp.mp3'; // Assuming you have a sound file for new messages
-import database from '@react-native-firebase/database';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { shiftStatusChange } from '../../utils/common';
-import { JOBENDPOINT } from '../../utils/constants';
-import api from '../../services/api';
-import { create } from 'zustand';
-// import { setupAudio , playNewMessageSound } from './AudioMessage';
-// import Sound from 'react-native-sound'; // Import react-native-sound
-
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android') {
@@ -74,10 +65,9 @@ const [showVehicleModal, setShowVehicleModal] = useState(false);
 const [tempVehiclePlate, setTempVehiclePlate] = useState('');
 const [tempVehicleModel, setTempVehicleModel] = useState('');
 
-const { shiftStarted, shiftStartTime, selectedVehicle, shiftCloseTime, startShift, endShift ,  driver , vehicles  } = useContext(ShiftContext);
+const { shiftStarted, shiftStartTime, shiftCloseTime, startShift, endShift, selectedVehicle, setSelectedVehicle } = useContext(ShiftContext);
 const { currentJob, setCurrentJob, setJobStatus, setIsOnline } = useJobStore();
 const { isBackgroundServiceRunning } = useLocationStore();
-  
 
 // Animation value for fade-in effect
 const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -86,278 +76,19 @@ const fadeAnim = useRef(new Animated.Value(0)).current;
 const [todayEarnings, setTodayEarnings] = useState(0);
 const [tripsCompletedToday, setTripsCompletedToday] = useState(0);
 const [onlineTime, setOnlineTime] = useState(0); // in seconds
-  const onlineTimer = useRef(null);
-    const [messageSound, setMessageSound] = useState(null); // State to hold the sound instance
-  const [unreadChatCount, setUnreadChatCount] = useState(0);
-  const [driverDetails, setDriverDetails] = useState(null); // To hold driver details 
-  const userId = auth().currentUser?.uid;
-   // Load the sound file outside useEffect
- 
-  
-    const CreateJobObject = async (response) => {
-  try {
-    if (!response) return null;
+const onlineTimer = useRef(null);
 
-    const {
-      id,
-      pickupLocation,
-      dropoffLocation,
-      createdAt,
-      pickupTime,
-      dropoffTime,
-      fare,
-      earningsSoFar,
-      status,
-      distance,
-      duration,
-      rider,
-      notes,
-      tarrif,
-    } = response;
-
-    const jobObject = {
-      id: id || '',
-      pickupLocation: pickupLocation?.address || 'N/A',
-      dropoffLocation: dropoffLocation?.address || 'N/A',
-      pickupLat: pickupLocation?.latitude || 0,
-      pickupLng: pickupLocation?.longitude || 0,
-      dropoffLat: dropoffLocation?.latitude || 0,
-      dropoffLng: dropoffLocation?.longitude || 0,
-      destination: dropoffLocation?.address || 'N/A',
-      CreatedAt: createdAt || new Date().toISOString(),
-      pickupTime: pickupTime || '',
-      dropoffTime: dropoffTime || '',
-      earningsSoFar: earningsSoFar || '0.00',
-      estimatedFare: fare ?? '0.00',
-      status: status || 'pending',
-      distance: distance ?? '0.0',
-      estimatedDuration: duration || '25 mins',
-      riderName: rider?.name || 'Guest User',
-      riderPhone: rider?.phoneNumber || '+974 123123123',
-      notes: notes || '',
-      vehicle: {
-        model: tarrif?.name ? `${tarrif.name} Tier` : 'Standard Vehicle',
-        color: 'White',
-      },
-      destinationLat: dropoffLocation?.latitude || 0,
-      destinationLng: dropoffLocation?.longitude || 0,
-      coordinateHistory: [],
-      driver_job_start_time: null,
-      driver_job_end_time: null,
-    };
-
-    console.log('🚗 JOB Object:', jobObject);
-    return jobObject;
-  } catch (error) {
-    console.error('❌ Error creating job object:', error.message);
-    return null;
-  }
-};
-
-  const fetchPendingJob = async () => {
-    try {
-      const response = await api.get(JOBENDPOINT.GET_PENDING_RIDES, {
-        Authorization: `Bearer ${driver.token}`,
-      });
-      // console.log("Available Jobs:", response);
-      setAvailableJobs(response);
-    } catch (error) {
-      console.error("Error fetching pending jobs:", error.message);
-    }
-  };
-
-  const fetchActiveJob = async () => {
-    try {
-      const response = await api.get(
-        JOBENDPOINT.GET_DRIVER_ACTIVE_RIDE(driver?.driverId),
-        {
-          Authorization: `Bearer ${driver.token}`,
-        }
-      );
-      if(response?.length === 0) {
-        // setCurrentJob(null);
-        return;
-      }
-      const job = await CreateJobObject(response[0]);
-      setCurrentJob(job);
-    } catch (error) {
-      console.error("Error fetching active job:", error.message);
-    }
-  };
-
-    
-      const fetchPreviousJobs = async () => {
-    try {
-      const response = await api.get(
-        JOBENDPOINT.GET_LAST_THREE_RIDE(driver?.driverId),
-        {
-          Authorization: `Bearer ${driver.token}`,
-        }
-      );
-      // const job = await CreateJobObject(response);
-      // setCurrentJob(job);
-      // console.log("responseresponseresponseresponseprevous", response);
-      setMockPreviousJobs(response);
-        // setAvailableJobs(response);
-    } catch (error) {
-      console.error("Error fetching active job:", error.message);
-    }
-  };
-  useEffect(() => {
-  let intervalId: number | null = null;
-
-  const initialize = () => {
-    if (!driver) return;
-    setDriverDetails(driver);
-    fetchInitialUnreadCount();
-    fetchPendingJob();
-    fetchActiveJob();
-    fetchPreviousJobs();
-  };
-
-  initialize();
-
-  // Conditionally start interval
-  if (shiftStarted && shiftStartTime) {
-    intervalId = window.setInterval(() => {
-      fetchPendingJob();
-      fetchActiveJob();
-    }, 30000); // every 30 seconds
-  }
-
-  const unsubscribe = setupNewMessageListeners();
-
-  return () => {
-    // Clear interval if it was set
-    if (intervalId !== null) {
-      clearInterval(intervalId);
-    }
-
-    if (typeof unsubscribe === "function") {
-      unsubscribe();
-    }
-  };
-}, [userId, shiftStarted, shiftStartTime, driver]);
-
-
-  // useEffect(() => {
-  
-  //   const getpendingjob = async () => {
-  //       let response = await api.get(JOBENDPOINT.GET_PENDING_RIDES,  {
-  //               Authorization: `Bearer ${driver.token}`,
-  //     })
-  //   console.log("availebleJobavailebleJobavailebleJob", response);
-  //        setAvailableJobs(response); 
-  //   }
-  //   getpendingjob(); 
-    
-  //   const getactivejob = async () => {
-  //       let response = await api.get(JOBENDPOINT.GET_DRIVER_ACTIVE_RIDE(driver?.driverId),  {
-  //               Authorization: `Bearer ${driver.token}`,
-  //     })
-       
-  //     setCurrentJob(await CreateJobObject(response));
-  //    }
-  //   getactivejob();
-  //    if (driver) {
-     
-  //     setDriverDetails(driver)
-  //   }
-  //    fetchInitialUnreadCount();
-  //   return setupNewMessageListeners();
-  // }, [userId]);
-
-  const fetchInitialUnreadCount = async () => {
-    if (userId) {
-      // console.log('Fetching initial unread count for user:', userId);
-      const companyId = await AsyncStorage.getItem('CompanyId') || 1;
-      const onlineDriversRef = database().ref(`companies/${companyId}/onlineAgents`);
-      let initialUnread = 0;
-
-      try {
-        const driversSnapshot = await onlineDriversRef.once('value');
-        const driversData = driversSnapshot.val();
-
-        if (driversData) {
-          const driverIds = Object.keys(driversData).filter(id => id !== userId);
-
-          await Promise.all(
-            driverIds.map(async (driverId) => {
-              const chatKey = [userId, driverId].sort().join('_');
-              const chatRef = database().ref(`chat_history/${chatKey}`);
-              const messagesSnapshot = await chatRef.orderByChild('timestamp').once('value');
-
-              messagesSnapshot.forEach(messageSnap => {
-                const message = messageSnap.val();
-                if (message.receiverId === userId && !message.read) {
-                  initialUnread++;
-                }
-              });
-            })
-          );
-          setUnreadChatCount(initialUnread);
-          // console.log('Initial Unread Count:', initialUnread);
-        }
-      } catch (error) {
-        console.error('Error fetching initial unread count:', error.message);
-      }
-    }
-  };
-
-  const setupNewMessageListeners = () => {
-    let chatListeners = [];
-    const setup = async () => {
-      if (userId) {
-        // console.log('Setting up new message listeners for user:', userId);
-        const companyId = await AsyncStorage.getItem('CompanyId') || 1;
-        const onlineDriversRef = database().ref(`companies/${companyId}/onlineAgents`);
-
-        try {
-          const driversSnapshot = await onlineDriversRef.once('value');
-          const driversData = driversSnapshot.val();
-
-          if (driversData) {
-            const driverIds = Object.keys(driversData).filter(id => id !== userId);
-
-            driverIds.forEach(driverId => {
-              const chatKey = [userId, driverId].sort().join('_');
-              const chatRef = database().ref(`chat_history/${chatKey}`);
-
-              const listener = chatRef.on('child_added', (messageSnapshot) => {
-                const message = messageSnapshot.val();
-                if (message && message.receiverId === userId && message.read == false) {
-                  setUnreadChatCount(prevCount => prevCount + 1);
-                  showInfoToast('New Message', message.text || 'Image');
-                  if (messageSound) {
-                      messageSound.release();
-                    }
-                }
-              });
-              chatListeners.push({ chatKey, listener });
-            });
-          }
-        } catch (error) {
-          console.error('Error setting up new message listeners:', error.message);
-        }
-      }
-    };
-
-    setup();
-
-    return () => {
-      // console.log('Cleaning up new message listeners');
-      chatListeners.forEach(({ chatKey, listener }) => {
-        database().ref(`chat_history/${chatKey}`).off('child_added', listener);
-      });
-    };
-  };
 const [availableJobs, setAvailableJobs] = useState([
   { id: 'a1', destination: 'Souq Waqif', pickup: 'Doha Corniche', earning: 'QAR 100', estimatedDuration: '15 mins', distance: '5.2 km', destinationLat: 25.274188294053577, destinationLng: 51.5455120537612, pickupLat: 25.2933, pickupLng: 51.5310 },
   { id: 'a2', destination: 'Hamad Intl Airport', pickup: 'West Bay', earning: 'QAR 140', estimatedDuration: '25 mins', distance: '12.8 km', destinationLat: 25.274188294053577, destinationLng: 51.5455120537612, pickupLat: 25.3211, pickupLng: 51.5032 },
   { id: 'a3', destination: 'Aspire Zone', pickup: 'Al Sadd', earning: 'QAR 110', estimatedDuration: '20 mins', distance: '8.5 km', destinationLat: 25.274188294053577, destinationLng: 51.5455120537612, pickupLat: 25.2900, pickupLng: 51.4800 },
 ]);
 
-const [mockPreviousJobs , setMockPreviousJobs] = useState([] );
+const mockPreviousJobs = [
+  { id: 'p1', destination: 'West Bay', earnings: 'QAR 300', date: '2025-05-20', status: 'completed' },
+  { id: 'p2', destination: 'The Pearl', earnings: 'QAR 150', date: '2025-05-19', status: 'completed' },
+  { id: 'p3', destination: 'Lusail', earnings: 'QAR 250', date: '2025-05-18', status: 'completed' },
+];
    const simulateJob = () => {
   const fakeJob = {
     id: 'JOB-2025-001',
@@ -413,7 +144,7 @@ useEffect(() => {
   // Check and start background location service if not running
   const checkLocationService = async () => {
     if (!isBackgroundServiceRunning) {
-      // console.log('Location service not running, attempting to start...');
+      console.log('Location service not running, attempting to start...');
       await startService();
     }
   };
@@ -432,44 +163,71 @@ useEffect(() => {
 
 // --- Online Time Tracking ---
 useEffect(() => {
-  // console.log("🟡 Online time tracking started:", shiftStarted, JSON.stringify(shiftStartTime));
-
-  const startTracking = () => {
-    if (onlineTimer.current) clearInterval(onlineTimer.current);
-
+  if (shiftStarted && shiftStartTime) {
     onlineTimer.current = setInterval(() => {
       const now = Date.now();
       const diffSeconds = Math.floor((now - new Date(shiftStartTime).getTime()) / 1000);
-      // console.log("🟢 Online time tracking:", diffSeconds, "seconds");
       setOnlineTime(diffSeconds);
     }, 1000);
-  };  
-
-  if (shiftStarted && shiftStartTime) {
-    console.log("🟢 Online time tracking started");
-    startTracking();
-
-    // 🔁 Double-push fallback: Retry tracking in 100ms if it's the first load
-    setTimeout(() => {
-      // if (!onlineTimer.current) {
-        // console.log("🔁 Retrying interval setup...");
-        startTracking();
-      // }
-    }, 100);
   } else {
-    console.log("🟡 Online time tracking stopped");
     clearInterval(onlineTimer.current);
-    onlineTimer.current = null;
     setOnlineTime(0);
   }
-
-  return () => {
-    clearInterval(onlineTimer.current);
-    onlineTimer.current = null;
-  };
+  return () => clearInterval(onlineTimer.current);
 }, [shiftStarted, shiftStartTime]);
 
- 
+
+// --- Action Handlers ---
+const handleLogout = useCallback(async () => {
+  Alert.alert('Logout', 'Are you sure you want to logout?', [
+    { text: 'Cancel', style: 'cancel' },
+    {
+      text: 'Logout',
+      style: 'destructive',
+      onPress: async () => {
+        setLogoutLoading(true);
+        try {
+          await auth().signOut();
+          stopService(); // Stop background service on logout
+          endShift(); // Ensure shift is ended and cleared
+          setIsOnline(false); // Mark offline on logout
+        } catch (e) {
+          Alert.alert('Error', 'Logout failed, please try again.');
+        } finally {
+          setLogoutLoading(false);
+        }
+      },
+    },
+  ]);
+}, [endShift, setIsOnline]);
+
+// const handleShiftToggle = useCallback(() => {
+//   LayoutAnimation.easeInEaseOut(); // Animate layout changes
+
+//   if (shiftStarted) {
+//     // Close Shift
+//     Alert.alert(
+//       'Confirm Shift Close',
+//       'Are you sure you want to close your shift?',
+//       [
+//         { text: 'Cancel', style: 'cancel' },
+//         {
+//           text: 'Yes, Close Shift',
+//           onPress: () => {
+//             endShift(); // Clears context + AsyncStorage
+//             stopService(); // Stop background service
+//             setIsOnline(false); // Mark offline
+//             Alert.alert('Shift Closed', 'You have successfully closed your shift.');
+//           },
+//         },
+//       ],
+//       { cancelable: true }
+//     );
+//   } else {
+//     // Start Shift
+//     setShowVehicleModal(true); // Show modal to select vehicle
+//   }
+// }, [shiftStarted, endShift, setIsOnline]);
 const handleShiftToggle = useCallback(() => {
   LayoutAnimation.easeInEaseOut();
 
@@ -479,11 +237,11 @@ const handleShiftToggle = useCallback(() => {
       message: 'Are you sure you want to close your shift?',
       confirmText: 'Yes, Close Shift',
       cancelText: 'Cancel',
-      onConfirm: async() => {
-        // await shiftStatusChange(false);
-        await shiftStatusChange(false, selectedVehicle.id, driver.driverId,driver.token, 'offboard');
+      onConfirm: async () => {
+        
+        endShift();         // Clear context + AsyncStorage
+        await shiftStatusChange(false);
          
-           endShift();         // Clear context + AsyncStorage
         stopService();      // Stop background service
         setIsOnline(false); // Mark offline
          showSuccessToast('Shift Closed', 'You have successfully closed your shift.');
@@ -511,85 +269,81 @@ const confirmStartShift = useCallback(async () => {
 }, [startShift, tempVehiclePlate, tempVehicleModel, setIsOnline]);
 
 
-const onRefresh = useCallback( () => {
+const onRefresh = useCallback(() => {
   setRefreshing(true);
   // Simulate fetching new jobs/data
-  setTimeout( async () => {
+  setTimeout(() => {
     // Example: Add a new available job
-    // const newJobId = `a${availableJobs.length + 1}`;
-    // const newJob = {
-    //   id: newJobId,
-    //   destination: `New Destination ${newJobId}`,
-    //   pickup: `New Pickup ${newJobId}`,
-    //   earning: `QAR ${Math.floor(Math.random() * 50) + 50}`,
-    //   estimatedDuration: '10 mins',
-    //   distance: '3.0 km',
-    //   destinationLat: 25.274188294053577,
-    //   destinationLng: 51.5455120537612,
-    //   pickupLat: 25.2933,
-    //   pickupLng: 51.5310,
-    // };
-   await  fetchPendingJob();
-   await fetchActiveJob();
-   await fetchPreviousJobs();
-    // setAvailableJobs((prev) => [newJob, ...prev]);
-    
+    const newJobId = `a${availableJobs.length + 1}`;
+    const newJob = {
+      id: newJobId,
+      destination: `New Destination ${newJobId}`,
+      pickup: `New Pickup ${newJobId}`,
+      earning: `QAR ${Math.floor(Math.random() * 50) + 50}`,
+      estimatedDuration: '10 mins',
+      distance: '3.0 km',
+      destinationLat: 25.274188294053577,
+      destinationLng: 51.5455120537612,
+      pickupLat: 25.2933,
+      pickupLng: 51.5310,
+    };
+    setAvailableJobs((prev) => [newJob, ...prev]);
     setRefreshing(false);
-    // fetchUnreadChatCount(); // Refresh chat count after fetching new jobs
     // Alert.alert('Refreshed', 'New jobs might be available!');
     showInfoToast('Refreshed', 'New jobs might be available!'); // Show toast notification
   }, 1500);
 }, [availableJobs.length]);
 
- 
+// const handleAcceptJob = useCallback((job) => {
+//   LayoutAnimation.easeInEaseOut();
+//   Alert.alert(
+//     'Accept Job?',
+//     `Do you want to accept the job to ${job.destination} for ${job.earning}?`,
+//     [
+//       { text: 'Decline', style: 'cancel' },
+//       {
+//         text: 'Accept',
+//         onPress: () => {
+//           // In a real app, this would be an API call to accept the job
+//           // For now, we'll simulate setting it as the current job
+//           setCurrentJob({ ...job, status: 'accepted', driver_job_start_time: new Date().toISOString() });
+//           setAvailableJobs((prev) => prev.filter((j) => j.id !== job.id));
+//           Alert.alert('Job Accepted', `You have accepted the job to ${job.destination}.`);
+//           navigation.navigate('JobTrackingScreen', { job: { ...job, status: 'accepted', driver_job_start_time: new Date().toISOString() } });
+//         },
+//       },
+//     ]
+//   );
+// }, [setCurrentJob, setAvailableJobs, navigation]);
 const handleAcceptJob = useCallback((job) => {
-  if (!job) return;
-
-  const pickupAddress = job?.pickupLocation?.address ?? 'Unknown Location';
-
   LayoutAnimation.easeInEaseOut();
-
-  showConfirmationToast({
+   showConfirmationToast({
     title: 'Accept Job?',
-    message: `PickUp Location: ${pickupAddress}`,
+    message: `Do you want to accept the job to ${job.destination} for ${job.earning}?`,
     confirmText: 'Accept',
     cancelText: 'Decline',
-    onConfirm: async () => {
-      try {
-        // Create a UI-friendly job object
-        const jobObject = await CreateJobObject(job);
-        if (!jobObject) {
-          showErrorToast('Error', 'Failed to process job details.');
-          return;
-        }
+    onConfirm: () => {
+      const acceptedJob = {
+        ...job,
+        status: 'accepted',
+        driver_job_start_time: new Date().toISOString(),
+      };
 
-        // Mark the job as accepted with start time
-        jobObject.status = 'accepted';
-        jobObject.driver_job_start_time = new Date().toISOString();
+      setCurrentJob(acceptedJob);
+      setAvailableJobs((prev) => prev.filter((j) => j.id !== job.id));
 
-        console.log('✅ Accepted Job:', JSON.stringify(jobObject, null, 2));
-
-        setCurrentJob(jobObject);
-        setAvailableJobs(prev => prev.filter(j => j.id !== job.id));
-
-        showSuccessToast(
-          '✅ Job Accepted',
-          `You have accepted the job to ${jobObject.dropoffLocation.address}.`
-        );
-
-        // navigation.navigate('JobTrackingScreen', { job: jobObject });
-
-      } catch (error) {
-        console.error('Error during job acceptance:', error);
-        showErrorToast('Error', 'Something went wrong while accepting the job.');
-      }
+      showSuccessToast('✅ Job Accepted', `You have accepted the job to ${job?.destination}.`);
+      
+      navigation.navigate('JobTrackingScreen', {
+        job: acceptedJob,
+      });
     },
     onCancel: () => {
-      console.log('❌ Job declined');
+      // Optional: Add any decline logic here
+      console.log('Job declined');
     },
   });
 }, [setCurrentJob, setAvailableJobs, navigation]);
-
 
 const handleGoToActiveJob = useCallback(() => {
   if (currentJob) {
@@ -609,23 +363,18 @@ const renderJobCard = ({ item }) => (
   >
     <View style={styles.jobCardHeader}>
       <Icon name="map-marker-outline" size={20} color="#ADD8E6" />
-      <Text style={styles.jobDestination}>{item?.dropoffLocation?.address}</Text>
-      <Text style={styles.jobEarning}>{item?.fare}</Text>
-      <Text style={styles.jobDetailText}> <Icon name="human-male" size={20} color="#ccc"></Icon>{ item?.passengerCount }</Text>
-        <Text style={styles.jobDetailText}> <Icon name="human-wheelchair" size={20} color="#ccc"></Icon>{ item?.wheelchairCount }</Text>
-
-      <Text style={styles.jobDetailText}> <Icon name="bag-carry-on" size={20} color="#ccc"></Icon>{ item?.bagCount }</Text>
+      <Text style={styles.jobDestination}>{item.destination}</Text>
+      <Text style={styles.jobEarning}>{item.earning}</Text>
     </View>
     <View style={styles.jobCardDetails}>
       <Text style={styles.jobDetailText}>
-        <Icon name="map-marker-radius" size={14} color="#ccc" /> Pickup: {item?.pickupLocation?.address}
+        <Icon name="map-marker-radius" size={14} color="#ccc" /> Pickup: {item.pickup}
       </Text>
       <Text style={styles.jobDetailText}>
-        <Icon name="clock-outline" size={14} color="#ccc" /> {item?.duration || 'N/A'}
+        <Icon name="clock-outline" size={14} color="#ccc" /> {item.estimatedDuration}
       </Text>
       <Text style={styles.jobDetailText}>
-        <Icon name="map-marker-distance" size={14} color="#ccc" /> {item?.distance 
-        || 'N/A'}
+        <Icon name="map-marker-distance" size={14} color="#ccc" /> {item.distance}
       </Text>
     </View>
     <TouchableOpacity style={styles.acceptButton} onPress={() => handleAcceptJob(item)} activeOpacity={0.7}>
@@ -634,10 +383,7 @@ const renderJobCard = ({ item }) => (
     </TouchableOpacity>
   </TouchableOpacity>
 );
-  const goToChat = useCallback(() => {
-    setUnreadChatCount(0); // Reset unread count when navigating to chat
-    navigation.navigate('ChatScreen');
-  }, [navigation]);
+
 return (
   <SafeAreaView style={styles.safeArea}>
     <StatusBar barStyle="light-content" backgroundColor="#121212" />
@@ -648,35 +394,19 @@ return (
         <View style={styles.driverProfile}>
           <Icon name="account-circle" size={36} color="#FFD700" />
           <View style={{ marginLeft: 10 }}>
-            <Text style={styles.driverName}>{driverDetails?.userName}</Text>
+            <Text style={styles.driverName}>Ahmed Al Thani</Text>
             <Text style={styles.driverStatus}>
               <Icon name={shiftStarted ? "circle" : "circle-outline"} size={12} color={shiftStarted ? "#4CAF50" : "#FF5722"} />
               {shiftStarted ? ' Online' : ' Offline'}
             </Text>
           </View>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <TouchableOpacity onPress={goToChat} style={{ marginRight: 15 }}>
-            <Icon name="chat-outline" size={28} color="lightgreen" />
-             {unreadChatCount > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{unreadChatCount}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleShiftToggle} style={styles.shiftToggleButton} activeOpacity={0.7}>
-              <Icon name={shiftStarted ? "power-off" : "power-off"} size={24} color="red" />
-              <Text style={styles.shiftToggleButtonText}>
-                {shiftStarted ? 'End Shift' : 'Start Shift'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        {/* <TouchableOpacity onPress={handleShiftToggle} style={styles.shiftToggleButton} activeOpacity={0.7}>
+        <TouchableOpacity onPress={handleShiftToggle} style={styles.shiftToggleButton} activeOpacity={0.7}>
           <Icon name={shiftStarted ? "power-off" : "power"} size={24} color="#fff" />
           <Text style={styles.shiftToggleButtonText}>
             {shiftStarted ? 'End Shift' : 'Start Shift'}
           </Text>
-        </TouchableOpacity> */}
+        </TouchableOpacity>
       </View>
 
       {/* Network Status */}
@@ -705,23 +435,23 @@ return (
         
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Today’s Overview</Text>
-           {/* <TouchableOpacity   onPress={simulateJob}  >
-             <Text style={styles.sectionTitle} >Fake Jobe</Text>
-            </TouchableOpacity> */}
+           <TouchableOpacity   onPress={simulateJob}  >
+        <Text style={styles.sectionTitle} >Fake Jobe</Text>
+      </TouchableOpacity>
           <View style={styles.overviewRow}>
             <View style={styles.overviewItem}>
               <Icon name="cash-multiple" size={28} color="#FFD700" />
-              <Text style={styles.overviewValue}>QAR {parseFloat(driverDetails?.earningsBalance).toFixed(2)}</Text>
+              <Text style={styles.overviewValue}>QAR {parseFloat(todayEarnings).toFixed(2)}</Text>
               <Text style={styles.overviewLabel}>Earnings</Text>
             </View>
             <View style={styles.overviewItem}>
               <Icon name="check-circle-outline" size={28} color="#8BC34A" />
-              <Text style={styles.overviewValue}>{driverDetails?.totalRidesCompleted}</Text>
+              <Text style={styles.overviewValue}>{tripsCompletedToday}</Text>
               <Text style={styles.overviewLabel}>Trips</Text>
             </View>
             <View style={styles.overviewItem}>
               <Icon name="clock-outline" size={28} color="#ADD8E6" />
-              <Text style={styles.overviewValue}>{formatDuration(onlineTime)} </Text>
+              <Text style={styles.overviewValue}>{formatDuration(onlineTime)}</Text>
               <Text style={styles.overviewLabel}>Online Time</Text>
             </View>
           </View>
@@ -802,10 +532,10 @@ return (
                 <View style={styles.previousJobItem}>
                   <View style={styles.previousJobDetails}>
                     <Icon name="flag-checkered" size={20} color="#ADD8E6" />
-                    <Text style={styles.previousJobDestination}>{item.dropoffLocation.address}</Text>
+                    <Text style={styles.previousJobDestination}>{item.destination}</Text>
                   </View>
-                  <Text style={styles.previousJobEarnings}>{item.fare}</Text>
-                  <Text style={styles.previousJobDate}>{item.createdAt}</Text>
+                  <Text style={styles.previousJobEarnings}>{item.earnings}</Text>
+                  <Text style={styles.previousJobDate}>{item.date}</Text>
                 </View>
               )}
             />
@@ -938,22 +668,7 @@ const styles = StyleSheet.create({
 safeArea: {
   flex: 1,
   backgroundColor: '#1a1a1a', // Dark background for the whole screen
-},  badge: {
-    position: 'absolute',
-    top: -5,
-    right: -5,
-    backgroundColor: 'red',
-    borderRadius: 10,
-    width: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  badgeText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
+},
 container: {
   flex: 1,
   backgroundColor: '#1a1a1a',
