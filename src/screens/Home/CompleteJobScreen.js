@@ -13,7 +13,9 @@ import {
   UIManager, // For LayoutAnimation on Android
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { database } from './../../services/firebase'; // Assuming Firebase Realtime Database
+// import { database } from './../../services/firebase'; // Assuming Firebase Realtime Database
+import database from '@react-native-firebase/database';
+
 import useJobStore from './../../store/jobStore'; // adjust path as needed
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons'; // For icons

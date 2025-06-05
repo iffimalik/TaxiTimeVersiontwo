@@ -131,7 +131,7 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
       estimatedFare: fare ?? '0.00',
       status: status || 'pending',
       distance: distance ?? '0.0',
-      estimatedDuration: duration || '25 mins',
+      estimatedDuration: duration || 'N/A',
       riderName: rider?.name || 'Guest User',
       riderPhone: rider?.phoneNumber || '+974 123123123',
       notes: notes || '',
@@ -511,7 +511,7 @@ const onRefresh = useCallback( () => {
     // Alert.alert('Refreshed', 'New jobs might be available!');
     showInfoToast('Refreshed', 'New jobs might be available!'); // Show toast notification
   }, 1500);
-}, [availableJobs.length]);
+}, [availableJobs?.length]);
 
  
 const handleAcceptJob = useCallback((job) => {
@@ -578,7 +578,7 @@ const CreateNewJob = async () => {
     // Step 1: Try to reverse geocode pickup address
     let displayName = 'No address found';
     try {
-      const reverseGeocodeUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`;
+      const reverseGeocodeUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&accept-language=en`;
       const response = await fetch(reverseGeocodeUrl, {
         headers: {
           'User-Agent': 'YourAppName/1.0 (your@email.com)',
@@ -598,7 +598,7 @@ const CreateNewJob = async () => {
     // Step 2: Construct job object
     const newJobObject = {
       driverId: driver.driverId,
-      riderId: '929b8f9e-0a3a-49f0-8409-2fef7c6bcd02',
+      riderId: driver.userId,
       pickupLocation: {
         address: displayName,
         latitude,
@@ -609,7 +609,7 @@ const CreateNewJob = async () => {
         latitude: 0,
         longitude: 0,
       },
-      tariffId: '6f459a5a-51a9-410e-9239-ddfdb3987d63',
+      tariffId: '81ad619e-8947-4869-b11c-cfe319cabf65',
       passengerCount: 1,
       bagCount: 0,
       wheelchairCount: 0,
@@ -814,7 +814,7 @@ return (
         )}
 
         {/* Available Jobs */}
-        {shiftStarted && availableJobs.length > 0 && (
+        {shiftStarted && availableJobs?.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>New Job Offers</Text>
             <FlatList

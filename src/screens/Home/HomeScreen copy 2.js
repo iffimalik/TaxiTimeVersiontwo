@@ -274,7 +274,7 @@ const onRefresh = useCallback(() => {
   // Simulate fetching new jobs/data
   setTimeout(() => {
     // Example: Add a new available job
-    const newJobId = `a${availableJobs.length + 1}`;
+    const newJobId = `a${availableJobs?.length + 1}`;
     const newJob = {
       id: newJobId,
       destination: `New Destination ${newJobId}`,
@@ -292,7 +292,7 @@ const onRefresh = useCallback(() => {
     // Alert.alert('Refreshed', 'New jobs might be available!');
     showInfoToast('Refreshed', 'New jobs might be available!'); // Show toast notification
   }, 1500);
-}, [availableJobs.length]);
+}, [availableJobs?.length]);
 
 // const handleAcceptJob = useCallback((job) => {
 //   LayoutAnimation.easeInEaseOut();
@@ -506,7 +506,7 @@ return (
         )}
 
         {/* Available Jobs */}
-        {shiftStarted && availableJobs.length > 0 && (
+        {shiftStarted && availableJobs?.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>New Job Offers</Text>
             <FlatList
