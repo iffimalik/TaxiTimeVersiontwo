@@ -41,18 +41,7 @@ const StartShiftScreen = () => {
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [dummyVehicles, setDummyVehicles] = useState([]);
   const [selectedDriver, setSelectedDriver] = useState(null);
-  // const handleStartShift = useCallback(() => {
-  //   const selectedVehicle = dummyVehicles.find(v => v.id === selectedId);
-  //   if (selectedVehicle) {
-  //     startShift(selectedVehicle);
-  //     startService();
-  //     Alert.alert('Shift Started', `You are now online with ${selectedVehicle.name}!`);
-  //     navigation.replace('Home');
-  //   } else {
-  //     Alert.alert('Selection Required', 'Please select a vehicle to start your shift.');
-  //   }
-  // }, [selectedId, startShift, navigation]);
-
+ 
 
   useEffect(() => {
     const fetchVehicles = async () => {   

@@ -41,17 +41,16 @@ export const shiftStatusChange = async (status, vehicleId, driverId, token, jobs
   }
 };
 
-// changeRideStatus now takes driver info as parameters
-export const changeRideStatus = async (status, jobId, driverId, token) => {
+ export const changeRideStatus = async (status, jobId, driverId, token , joobject) => {
   try {
     const response = await api.put(
       JOBENDPOINT.CHANGE_RIDE_STATUS(jobId, driverId, status),
-      {},
+      joobject,
       {
         Authorization: `Bearer ${token}`,
       }
     );
-    return response;
+    return null;
   } catch (error) {
     console.error('Error changing ride status:', error);
     return null;

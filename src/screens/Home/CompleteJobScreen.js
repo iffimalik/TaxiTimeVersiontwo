@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef , useContext } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,8 @@ import useJobStore from './../../store/jobStore'; // adjust path as needed
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons'; // For icons
 import { showErrorToast, showSuccessToast } from '../../utils/showToast';
+import { changeRideStatus } from '../../utils/common';
+import { ShiftContext } from '../../context/ShiftContext';
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android') {
@@ -33,12 +35,13 @@ const { width, height } = Dimensions.get('window');
 const SPACING = width * 0.05; // 5% of screen width for general spacing
 
 const CompleteJobScreen = ({ route }) => {
-  const { job } = route.params; // Get job details from route params
+  // const { job } = route.params; // Get job details from route params
   const navigation = useNavigation();
   const { currentJob, setCurrentJob, setJobStatus, updateCurrentJob, clearJob } = useJobStore();
   const fadeAnim = useRef(new Animated.Value(0)).current; // For fade-in animation
   const confettiAnim = useRef(new Animated.Value(0)).current; // For confetti-like animation (scale)
-
+  const {    driver   } = useContext(ShiftContext);
+ 
   // --- Initial Setup and Animations ---
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -64,49 +67,38 @@ const CompleteJobScreen = ({ route }) => {
     ).start();
 
     // Ensure job data is available from route params
-    if (!job || !job.id) {
+    if (!currentJob || !currentJob.id) {
       // Alert.alert('Error', 'Job details not found. Returning to home.');
       showErrorToast('Error', 'Job details not found. Returning to home.');
       navigation.replace('Home');
     }
-  }, [fadeAnim, confettiAnim, job, navigation]);
+  }, [fadeAnim, confettiAnim, currentJob]);
 
-  const handleFinish = useCallback(async () => {
+  const handleFinish = async () => {
     LayoutAnimation.easeInEaseOut(); // Animate layout changes
     try {
+     await changeRideStatus('finished', currentJob?.id, driver.driverId, driver.token , currentJob);
+
       // Update job status in store
       setJobStatus('finished');
       const finished_time = new Date().toISOString();
       updateCurrentJob({ finished_time, status: 'finished' });
 
-      const jobId = job?.id; // Use job from route params
-      if (jobId) {
-        // Clear job from Firebase Realtime Database (if applicable)
-        // Ensure 'database()' is correctly initialized and has write permissions
-        await database().ref(`jobs/${jobId}`).set(null);
-        console.log(`Job ${jobId} removed from Firebase.`);
-      }
-
-      // Clear offline job from AsyncStorage
-      await AsyncStorage.removeItem('offlineJob');
-      console.log('Offline job cleared from AsyncStorage.');
-
-      // Clear current job from global state and reset status
-      clearJob(); // This should set currentJob to null and jobStatus to 'pending'
+       // Clear current job from global state and reset status
+      // clearJob(); // This should set currentJob to null and jobStatus to 'pending'
 
       // Alert.alert('Job Completed', 'Thank you for completing the ride!');
       showSuccessToast('Job Completed', 'Thank you for completing the ride!');
-      // await changeRideStatus('completed', currentJob?.id, driver.driverId, driver.token);
-      navigation.replace('Home'); // Navigate back to Home screen
+
     } catch (err) {
       console.error('Error completing job:', err.message);
       // Alert.alert('Error', 'Failed to complete the job. Please try again.');
       showErrorToast('Error', 'Failed to complete the job. Please try again.');
     }
-  }, [job, setJobStatus, updateCurrentJob, clearJob, navigation]);
+  };
 
   // Render nothing if job data is missing (should be caught by useEffect)
-  if (!job || !job.id) {
+  if (!currentJob || !currentJob.id) {
     return null;
   }
 
@@ -142,32 +134,32 @@ const CompleteJobScreen = ({ route }) => {
 
         <View style={styles.divider} />
 
-        <LabelValue icon="identifier" label="Job ID" value={job.id} />
-        <LabelValue icon="map-marker-outline" label="Pickup" value={job.pickupLocation} />
-        <LabelValue icon="flag-checkered" label="Dropoff" value={job.dropoffLocation} />
+        <LabelValue icon="identifier" label="Job ID" value={currentJob.id} />
+        <LabelValue icon="map-marker-outline" label="Pickup" value={currentJob.pickupLocation} />
+        <LabelValue icon="flag-checkered" label="Dropoff" value={currentJob.dropoffLocation} />
 
         <View style={styles.earningsSection}>
           <Icon name="cash-multiple" size={30} color="#FFD700" />
           <View>
             <Text style={styles.earningsLabel}>Total Earnings</Text>
-            <Text style={styles.earningsValue}>QAR {parseFloat(job.earningsSoFar || 0).toFixed(2)}</Text>
+            <Text style={styles.earningsValue}>QAR {parseFloat(currentJob.earningsSoFar || 0).toFixed(2)}</Text>
           </View>
         </View>
 
         <LabelValue
           icon="map-marker-distance"
           label="Distance"
-          value={`${(job.distanceTravelled / 1000 || 0).toFixed(2)} km`}
+          value={`${(currentJob.distanceTravelled / 1000 || 0).toFixed(2)} km`}
         />
         <LabelValue
           icon="clock-outline"
           label="Duration"
-          value={job.estimatedDuration || 'N/A'} // Assuming job has estimatedDuration
+          value={currentJob.estimatedDuration || 'N/A'} // Assuming job has estimatedDuration
         />
         <LabelValue
           icon="account-circle"
           label="Rider"
-          value={job.riderName || 'N/A'}
+          value={currentJob.riderName || 'N/A'}
         />
 
         <TouchableOpacity style={styles.finishButton} onPress={handleFinish} activeOpacity={0.7}>

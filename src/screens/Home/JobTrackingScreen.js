@@ -12,7 +12,11 @@ import {
   ScrollView,
   Dimensions,
 } from 'react-native';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+ 
+ 
+
+
+import MapView, { Marker, Polyline  , PROVIDER_GOOGLE} from 'react-native-maps';
 import MapViewDirections from 'react-native-maps-directions';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons'; // Using MaterialCommunityIcons for variety
 import Vehicle3D from './Vehicle3D'; // Assuming this component exists
@@ -43,6 +47,7 @@ const formatDistance = (meters) => {
 };
 
 const JobTrackingScreen = ({ route }) => {
+  const mapRef = useRef(null);
   const { job: initialJob } = route.params || {}; // Use initialJob to seed currentJob
   const latitude = useLocationStore((state) => state.latitude);
   const longitude = useLocationStore((state) => state.longitude);
@@ -51,9 +56,13 @@ const JobTrackingScreen = ({ route }) => {
 
   // Initialize currentJob from initialJob if jobStore is empty or needs to be synced
   useEffect(() => {
+    // Alert.alert('Job Tracking Screen', 'Job Tracking Screen');
+    console.log("initialJob", initialJob);
     if (initialJob && !currentJob?.id) {
       updateCurrentJob(initialJob);
     }
+
+
   }, [initialJob, currentJob, updateCurrentJob]);
 
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -131,24 +140,7 @@ const JobTrackingScreen = ({ route }) => {
   }, [latitude, longitude, currentJob]);
 
 
-  // --- Action Handlers ---
-  // const handleArrivedAtPickup = useCallback(() => {
-  //   Alert.alert(
-  //     'Confirm Arrival',
-  //     'Are you sure you have arrived at the pickup location?',
-  //     [
-  //       { text: 'Cancel', style: 'cancel' },
-  //       {
-  //         text: 'Confirm',
-  //         onPress: () => {
-  //           setJobStatus('arrived');
-  //           updateCurrentJob({ arrivedTime: new Date().toISOString() });
-  //           Alert.alert('Status Updated', 'You have arrived at the pickup location.');
-  //         },
-  //       },
-  //     ]
-  //   );
-  // }, [setJobStatus, updateCurrentJob]);
+ 
 const handleArrivedAtPickup = useCallback(() => {
   showConfirmationToast({
     title: 'Confirm Arrival',
@@ -163,24 +155,7 @@ const handleArrivedAtPickup = useCallback(() => {
   });
 }, [setJobStatus, updateCurrentJob]);
 
-  // const handleStartRide = useCallback(() => {
-  //   Alert.alert(
-  //     'Confirm Start Ride',
-  //     'Are you sure the ride has started?',
-  //     [
-  //       { text: 'Cancel', style: 'cancel' },
-  //       {
-  //         text: 'Confirm',
-  //         onPress: () => {
-  //           setJobStatus('started');
-  //           updateCurrentJob({ driver_job_start_time: new Date().toISOString() });
-           
-  //           showInfoToast('Ride Started', 'You can now navigate to the dropoff location.');
-  //         },
-  //       },
-  //     ]
-  //   );
-  // }, [setJobStatus, updateCurrentJob]);
+   
 const handleStartRide = useCallback(() => {
   showConfirmationToast({
     title: 'Confirm Start Ride',
@@ -195,49 +170,9 @@ const handleStartRide = useCallback(() => {
   });
 }, [setJobStatus, updateCurrentJob]);
 
-  // const handleCompleteJob = useCallback(() => {
-  //   Alert.alert(
-  //     'Confirm Completion',
-  //     'Are you sure you want to complete this job?',
-  //     [
-  //       { text: 'Cancel', style: 'cancel' },
-  //       {
-  //         text: 'Confirm',
-  //         onPress: () => {
-  //           clearInterval(timer.current);
-  //           setJobStatus('completed');
-  //           updateCurrentJob({ complete_job_time: new Date().toISOString() });
-  //           Alert.alert('Job Completed', 'The job has been successfully completed.');
+   
 
-            
-  //           // Navigate to a rating/summary screen here
-  //           // navigate('CompleteJobScreen', { job: currentJob });
-  //         },
-  //       },
-  //     ]
-  //   );
-  // }, [setJobStatus, updateCurrentJob]);
-
-  // const handleCancelJob = useCallback(() => {
-  //   Alert.alert(
-  //     'Cancel Job',
-  //     'Are you sure you want to cancel this job?',
-  //     [
-  //       { text: 'No', style: 'cancel' },
-  //       {
-  //         text: 'Yes, Cancel',
-  //         style: 'destructive',
-  //         onPress: () => {
-  //           clearInterval(timer.current);
-  //           setJobStatus('cancelled');
-  //           updateCurrentJob({ cancelledTime: new Date().toISOString() });
-  //           Alert.alert('Job Cancelled', 'The job has been cancelled.');
-  //           // Navigate back or to dashboard
-  //         },
-  //       },
-  //     ]
-  //   );
-  // }, [setJobStatus, updateCurrentJob]);
+   
 const handleCancelJob = useCallback(() => {
   showConfirmationToast({
     title: 'Cancel Job',
@@ -250,8 +185,8 @@ const handleCancelJob = useCallback(() => {
       updateCurrentJob({ cancelledTime: new Date().toISOString() });
       showErrorToast('Job Cancelled', 'The job has been cancelled.');
        
-      await changeRideStatus('cancelled', currentJob?.id, driver.driverId, driver.token);
-      // You can also add: navigation.navigate('Dashboard') if needed
+      await changeRideStatus('cancelled', currentJob?.id, driver.driverId, driver.token , currentJob);
+       
     },
   });
 }, [setJobStatus, updateCurrentJob]);
@@ -267,7 +202,7 @@ const handleCompleteJob = useCallback(() => {
       updateCurrentJob({ complete_job_time: new Date().toISOString() });
         
       showSuccessToast('Job Completed', 'The job has been successfully completed.');
-       await changeRideStatus('completed', currentJob?.id, driver.driverId, driver.token);
+       await changeRideStatus('completed', currentJob?.id, driver.driverId, driver.token , currentJob);
       // Navigate to a rating/summary screen here
       // navigate('CompleteJobScreen', { job: currentJob });
     },
@@ -310,23 +245,7 @@ const handleCompleteJob = useCallback(() => {
     );
   }, []);
 
-  // const handleSOS = useCallback(() => {
-  //   Alert.alert(
-  //     'Emergency SOS',
-  //     'Are you in an emergency? This will alert authorities or support.',
-  //     [
-  //       { text: 'Cancel', style: 'cancel' },
-  //       {
-  //         text: 'Confirm SOS',
-  //         style: 'destructive',
-  //         onPress: () => {
-  //           // Implement actual SOS logic here (e.g., send location, alert support)
-  //           Alert.alert('SOS Activated', 'Emergency services have been alerted.');
-  //         },
-  //       },
-  //     ]
-  //   );
-  // }, []);
+   
     const handleSOS = useCallback(() => {
       showConfirmationToast({
         title: '🚨 Emergency SOS',
@@ -353,8 +272,8 @@ const handleCompleteJob = useCallback(() => {
   }
 
   const currentPosition = latitude && longitude ? { latitude, longitude } : null;
-  const pickupCoords = { latitude: currentJob.pickupLat, longitude: currentJob.pickupLng };
-  const dropoffCoords = { latitude: currentJob.dropoffLat, longitude: currentJob.dropoffLng };
+  const pickupCoords = { latitude: currentJob?.pickupLat, longitude: currentJob?.pickupLng };
+  const dropoffCoords = { latitude: currentJob?.dropoffLat, longitude: currentJob?.dropoffLng };
 
   // Determine the route to display based on job status
   let routeOrigin = currentPosition;
@@ -375,8 +294,36 @@ const handleCompleteJob = useCallback(() => {
   const showStartButton = currentJob.status === 'arrived';
   const showCompleteButton = currentJob.status === 'started';
   const showCancelButton = currentJob.status !== 'completed' && currentJob.status !== 'cancelled';
-
-
+   
+ 
+useEffect(() => {
+  if (
+    mapRef.current &&
+    currentJob?.currentLocation?.latitude &&
+    currentJob?.currentLocation?.longitude &&
+    currentJob?.heading !== undefined &&
+    !isNaN(currentJob.heading)
+  ) {
+    // console.log('Animating camera to current job location:', currentJob.currentLocation , currentJob?.heading);
+    // if (Platform.OS === 'android' || Platform.OS === 'ios') {
+       if (mapRef.current) {
+          mapRef.current.animateCamera(
+            {
+              center: {
+                latitude: currentJob.currentLocation.latitude,
+                longitude: currentJob.currentLocation.longitude,
+              },
+              heading: parseInt(currentJob?.heading), // hard-coded test
+              pitch: 60,
+              zoom: 15, // Adjust zoom level as needed
+                altitude: 500,     // optional: tweak camera height
+            },
+            { duration: 500 }
+          );
+        }
+    // }
+  }
+}, [currentJob?.heading, currentJob?.currentLocation]);
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
@@ -418,7 +365,7 @@ const handleCompleteJob = useCallback(() => {
           <Icon name="cash-multiple" size={24} color="#FFD700" />
           <View>
             <Text style={styles.meterLabel}>Earnings</Text>
-            <Text style={styles.meterValue}>$ {currentJob?.earningsSoFar || '0.00'}</Text>
+            <Text style={styles.meterValuePrice}>$ {currentJob?.earningsSoFar || '0.00'}</Text>
           </View>
         </View>
 
@@ -505,42 +452,41 @@ const handleCompleteJob = useCallback(() => {
         </TouchableOpacity>
       )}
 
-        <MapView
+          <MapView
+           ref={mapRef}
+          provider={PROVIDER_GOOGLE}
           style={styles.map}
           initialRegion={{
-            latitude: currentJob?.currentLocation?.latitude,
-            longitude: currentJob?.currentLocation?.longitude,
+            latitude: currentJob?.currentLocation?.latitude || 0,
+            longitude: currentJob?.currentLocation?.longitude || 0,
             latitudeDelta: 0.01,
             longitudeDelta: 0.01,
           }}
-            showsUserLocation={true} // We'll use a custom marker
-            zoomEnabled={true}
-            scrollEnabled={true}
-            rotateEnabled={true}
-            pitchEnabled={true}
-          region={{ // Keep map centered on current location
-            latitude: currentJob?.currentLocation?.latitude,
-            longitude: currentJob?.currentLocation?.longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          }}
-          showsMyLocationButton={true}
-          showsCompass={true}
-          showsTraffic={false}
-          showsScale={true}
-          showsIndoors={false}
-          showsBuildings={false}
-          showsPointsOfInterest={false}
-          followsUserLocation={true} // Automatically follow user location
-          zoomControlEnabled={true}
-          zoomTapEnabled={true}
-        
+          showsBuildings={true} 
+          pitchEnabled={true} 
+          zoomEnabled
+          scrollEnabled
+          rotateEnabled
+         
+          zoomControlEnabled
+          zoomTapEnabled
           loadingEnabled
-          customMapStyle={mapStyle} // Apply dark map style
+          // customMapStyle={mapStyle}
+          showsCompass
+          showsMyLocationButton
+          showsUserLocation={true} // we're using custom marker
+          showsTraffic={false}
+          showsScale={false}
+          showsIndoors={false}
+          showsIndoorLevelPicker={false}
+          showsPointsOfInterest={false}
         >
           {/* Driver Marker */}
-          <Marker coordinate={currentJob?.currentLocation} anchor={{ x: 0.5, y: 0.5 }}>
-           <View style={styles.markerContainer}>
+            <Marker coordinate={currentJob?.currentLocation}
+            flat={true}
+              // rotation={currentJob?.heading} // ← yes sir, point the damn car the right way
+              anchor={{ x: 0.5, y: 0.5 }}>
+             <View style={styles.markerContainer}>
                 <Icon
                   name="taxi"
                   size={25}
@@ -557,7 +503,7 @@ const handleCompleteJob = useCallback(() => {
           <Marker
             coordinate={dropoffCoords}
             title="Dropoff"
-            description={currentJob.dropoffLocation}
+            description={currentJob?.dropoffLocation}
             pinColor="#FF5722" // Red
           >
             <Icon name="flag-checkered" size={30} color="#FF5722" />
@@ -607,14 +553,24 @@ export default JobTrackingScreen;
 
 const mapStyle = [
   // Dark map style JSON (you can find more online or customize)
-  { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#242f3e' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
+  // { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
+  // { elementType: 'labels.text.stroke', stylers: [{ color: '#242f3e' }] },
+  // { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
+   { elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#f5f5f5' }] },
   {
     featureType: 'administrative.locality',
     elementType: 'labels.text.fill',
     stylers: [{ color: '#d59563' }],
   },
+  {
+  featureType: 'poi',
+  elementType: 'geometry',
+  stylers: [{ visibility: 'off' }]
+  },
+
   {
     featureType: 'poi',
     elementType: 'labels.text.fill',
@@ -692,7 +648,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
-    paddingTop: StatusBar.currentHeight+30,
+    paddingTop: StatusBar.currentHeight,
   },
     navigationButton: {
     flexDirection: 'row',
@@ -790,9 +746,16 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   meterValue: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: '700',
     color: '#fff',
+    fontFamily: Platform.OS === 'ios' ? 'AvenirNext-Bold' : 'sans-serif-medium',
+  },
+   meterValuePrice: {
+    fontSize: 25,
+    fontWeight: '700',
+    color: 'red', // strong green
+    // color: '#fff',
     fontFamily: Platform.OS === 'ios' ? 'AvenirNext-Bold' : 'sans-serif-medium',
   },
   divider: {

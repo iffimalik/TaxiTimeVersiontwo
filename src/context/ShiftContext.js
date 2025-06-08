@@ -7,6 +7,7 @@ export const ShiftContext = createContext();
 export const ShiftProvider = ({ children }) => {
   const [shiftStarted, setShiftStarted] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
+  const [selectedTarrif, setSelectedTarrif] = useState(null);
   const [shiftStartTime, setShiftStartTime] = useState(null);
   const [shiftCloseTime, setShiftCloseTime] = useState(null);
   const [logginDriverId , setLoginDriverId] = useState(null);
@@ -43,11 +44,12 @@ export const ShiftProvider = ({ children }) => {
     loadShiftData();
   }, []);
 
-  const startShift = async (vehicle) => {
+  const startShift = async (vehicle , selectedtariff) => {
    const now = moment();
     console.log("now", now.format()); // ISO format
     setShiftStarted(true);
     setSelectedVehicle(vehicle);
+    setSelectedTarrif(selectedtariff);
     console.log("now", now);
     setShiftStartTime(now.toISOString());
     setShiftCloseTime(null);

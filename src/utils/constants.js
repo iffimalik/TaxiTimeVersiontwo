@@ -21,7 +21,13 @@ export const JOBENDPOINT = {
   GET_DRIVER_ACTIVE_RIDE: (driverId) => `/api/rider/ride/getDriverActiveRide/${driverId}`,
   GET_LAST_THREE_RIDE: (driverId) => `/api/rider/ride/getLastThreeRide/${driverId}`,
   GET_PENDING_RIDES: `/api/rider/ride/pending-rides`,
+GET_DRIVER_JOB_DETAILS:(driverId)=> `/api/rider/ride/todaystates/${driverId}`,
   CHANGE_RIDE_STATUS: (rideId , driverId , status) => `/api/rider/ride/changeRideStatus/${rideId}/${driverId}/${status}`,
   CREATE_RIDE: '/api/rider/ride/request',
   
 } 
+ 
+export const TarrifZone = {
+  DetectZoneAndTariff:   `/api/admin/zones/detect`,
+  
+}

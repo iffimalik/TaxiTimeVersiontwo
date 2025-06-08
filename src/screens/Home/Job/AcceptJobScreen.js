@@ -116,7 +116,7 @@ const { driver, selectedVehicle } = useContext(ShiftContext);
     updateCurrentJob({ acceptedTime, status: 'on_the_way' });
     // Alert.alert('✅ Job Accepted', 'You are now on the way to pickup!');
     showSuccessToast('Job Accepted', 'You have accepted the job and are on your way to the pickup location.');
-    await changeRideStatus('accepted', currentJob?.id, driver.driverId, driver.token);
+    await changeRideStatus('accepted', currentJob?.id, driver.driverId, driver.token , currentJob);
 
   }, [setJobStatus, updateCurrentJob]);
 
@@ -127,7 +127,7 @@ const { driver, selectedVehicle } = useContext(ShiftContext);
     updateCurrentJob({ on_the_way_time: onTheWayTime, status: 'arrived_ready' }); // Corrected status to 'arrived_ready'
     // Alert.alert('Status Updated', 'You are marked as "On the Way".');
     showSuccessToast('On the Way', 'You are now on the way to the pickup location.');
-     await changeRideStatus('on_the_way', currentJob?.id, driver.driverId, driver.token);
+     await changeRideStatus('on_the_way', currentJob?.id, driver.driverId, driver.token , currentJob);
   }, [setJobStatus, updateCurrentJob]);
 
   const handleArrived = useCallback(async () => {
@@ -137,7 +137,7 @@ const { driver, selectedVehicle } = useContext(ShiftContext);
     updateCurrentJob({ arrivedTime, status: 'arrived' });
     // Alert.alert('Status Updated', 'You have arrived at the pickup location.');
     showSuccessToast('Arrived', 'You have arrived at the pickup location. Please confirm with the rider.');
-    await changeRideStatus('arrived', currentJob?.id, driver.driverId, driver.token);
+    await changeRideStatus('arrived', currentJob?.id, driver.driverId, driver.token  , currentJob);
   }, [setJobStatus, updateCurrentJob]);
 
   const handleOnStart = useCallback(async () => {
@@ -149,7 +149,7 @@ const { driver, selectedVehicle } = useContext(ShiftContext);
     // Alert.alert('Ride Started', 'Enjoy the trip!');
      showSuccessToast('Ride Started', 'You have started the ride. Safe travels!');
     navigation.navigate('JobTrackingScreen', { job: currentJob });
-     await changeRideStatus('started', currentJob?.id, driver.driverId, driver.token);
+     await changeRideStatus('started', currentJob?.id, driver.driverId, driver.token , currentJob);
   }, [setJobStatus, updateCurrentJob, navigation, currentJob]);
 
   const handleReject = useCallback(async (auto = false) => {
@@ -164,7 +164,7 @@ const { driver, selectedVehicle } = useContext(ShiftContext);
       showErrorToast('Job Rejected', 'You did not respond in time. The job has been automatically rejected.');
     }
     setJobStatus('rejected'); // Set status to rejected
-    await changeRideStatus('rejected', currentJob?.id, driver.driverId, driver.token);
+    await changeRideStatus('rejected', currentJob?.id, driver.driverId, driver.token , currentJob);
     updateCurrentJob({ rejectedTime: new Date().toISOString(), status: 'rejected' }); // Update job in store
     clearJob(); // Clear current job from store
     // navigation.navigate('Home'); // Navigate back to Home
@@ -247,24 +247,7 @@ const { driver, selectedVehicle } = useContext(ShiftContext);
             <Icon name="map-marker-radius" size={30} color="#4CAF50" />
           </Marker>
 
-          {/* Route from Driver to Pickup */}
-          {/* <MapViewDirections
-            origin={driverCoords}
-            destination={pickupCoords}
-            apikey={GOOGLE_MAPS_APIKEY}
-            strokeWidth={4}
-            strokeColor="#4CAF50" // Green for pickup route
-            lineDashpattern={[10, 5]} // Dashed line
-            onReady={(result) => {
-              // Optionally update ETA/distance based on Google Directions API
-              // console.log(`Route Distance: ${result.distance} km`);
-              // console.log(`Route Duration: ${result.duration} mins`);
-            }}
-            onError={(errorMessage) => {
-              console.error('MapViewDirections Error:', errorMessage);
-              Alert.alert('Map Error', 'Could not load directions. Check API key or network.');
-            }}
-          /> */}
+         
         </MapView>
       </View>
  {/* Dynamic Action Buttons */}
@@ -276,7 +259,7 @@ const { driver, selectedVehicle } = useContext(ShiftContext);
               <Text style={styles.btnText}>Accept</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={async () => {
-                  await changeRideStatus('rejected', currentJob?.id, driver.driverId, driver.token);
+                  await changeRideStatus('rejected', currentJob?.id, driver.driverId, driver.token , currentJob);
                  handleReject(false)
                // Update job status in backend
             }} activeOpacity={0.7}>
@@ -688,85 +671,4 @@ const styles = StyleSheet.create({
     color: '#bbb',
   },
 });
-
-// // Dark map style JSON (reused from JobTrackingScreen for consistency)
-// const mapStyle = [
-//   { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
-//   { elementType: 'labels.text.stroke', stylers: [{ color: '#242f3e' }] },
-//   { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
-//   {
-//     featureType: 'administrative.locality',
-//     elementType: 'labels.text.fill',
-//     stylers: [{ color: '#d59563' }],
-//   },
-//   {
-//     featureType: 'poi',
-//     elementType: 'labels.text.fill',
-//     stylers: [{ color: '#d59563' }],
-//   },
-//   {
-//     featureType: 'poi.park',
-//     elementType: 'geometry',
-//     stylers: [{ color: '#263c3f' }],
-//   },
-//   {
-//     featureType: 'poi.park',
-//     elementType: 'labels.text.fill',
-//     stylers: [{ color: '#6b9a76' }],
-//   },
-//   {
-//     featureType: 'road',
-//     elementType: 'geometry',
-//     stylers: [{ color: '#38414e' }],
-//   },
-//   {
-//     featureType: 'road',
-//     elementType: 'geometry.stroke',
-//     stylers: [{ color: '#212a37' }],
-//   },
-//   {
-//     featureType: 'road',
-//     elementType: 'labels.text.fill',
-//     stylers: [{ color: '#9ca5b3' }],
-//   },
-//   {
-//     featureType: 'road.highway',
-//     elementType: 'geometry',
-//     stylers: [{ color: '#746855' }],
-//   },
-//   {
-//     featureType: 'road.highway',
-//     elementType: 'geometry.stroke',
-//     stylers: [{ color: '#1f2835' }],
-//   },
-//   {
-//     featureType: 'road.highway',
-//     elementType: 'labels.text.fill',
-//     stylers: [{ color: '#f3d19c' }],
-//   },
-//   {
-//     featureType: 'transit',
-//     elementType: 'geometry',
-//     stylers: [{ color: '#2f3948' }],
-//   },
-//   {
-//     featureType: 'transit.station',
-//     elementType: 'labels.text.fill',
-//     stylers: [{ color: '#d59563' }],
-//   },
-//   {
-//     featureType: 'water',
-//     elementType: 'geometry',
-//     stylers: [{ color: '#17263c' }],
-//   },
-//   {
-//     featureType: 'water',
-//     elementType: 'labels.text.fill',
-//     stylers: [{ color: '#515c6d' }],
-//   },
-//   {
-//     featureType: 'water',
-//     elementType: 'labels.text.stroke',
-//     stylers: [{ color: '#17263c' }],
-//   },
-// ];
+ 

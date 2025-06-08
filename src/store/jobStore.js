@@ -81,16 +81,15 @@ const useJobStore = create((set, get) => ({
 
   clearJob: async () => {
     const jobId = get().currentJob?.id;
+  
+
+    await AsyncStorage.removeItem('offlineJob');
     set({ currentJob: null, jobStatus: 'pending' });
 
     if (get().isOnline && jobId) {
       await database().ref(`jobs/${jobId}`).set(null);
-      
     }
-
-    await AsyncStorage.removeItem('offlineJob');
-    // console.log('✅ Job cleared from store and Firebase');
-    navigate('Home');
+ 
   },
 
   updateCurrentJob: async (updates) => {

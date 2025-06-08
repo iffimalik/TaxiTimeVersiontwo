@@ -38,6 +38,7 @@ import { shiftStatusChange } from '../../utils/common';
 import { JOBENDPOINT } from '../../utils/constants';
 import api from '../../services/api';
 import { create } from 'zustand';
+import { TarrifContext } from '../../context/TarrifContext';
 // import { setupAudio , playNewMessageSound } from './AudioMessage';
 // import Sound from 'react-native-sound'; // Import react-native-sound
 
@@ -75,7 +76,8 @@ const [tempVehiclePlate, setTempVehiclePlate] = useState('');
 const [tempVehicleModel, setTempVehicleModel] = useState('');
 
 const { shiftStarted, shiftStartTime, selectedVehicle, shiftCloseTime, startShift, endShift ,  driver , vehicles  } = useContext(ShiftContext);
-const { currentJob, setCurrentJob, setJobStatus, setIsOnline } = useJobStore();
+const {clearSelectedTarrif , isNeedtoRefresh, selectedTarrif, isTarrifSelected , availableTariffs , detectedZone } = useContext(TarrifContext);
+  const { currentJob, setCurrentJob, setJobStatus, setIsOnline } = useJobStore();
 const { isBackgroundServiceRunning  , latitude, longitude} = useLocationStore();
   
 
@@ -97,6 +99,9 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
     const CreateJobObject = async (response) => {
   try {
     if (!response) return null;
+
+    if (!selectedTarrif?.id)
+      return showErrorToast('Error', 'Please select a tariff before accepting a job.');
 
     const {
       id,
@@ -136,7 +141,7 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
       riderPhone: rider?.phoneNumber || '+974 123123123',
       notes: notes || '',
       vehicle: {
-        model: tarrif?.name ? `${tarrif.name} Tier` : 'Standard Vehicle',
+        model: selectedTarrif?.name ? `${selectedTarrif.name} Tier` : 'Standard Vehicle',
         color: 'White',
       },
       destinationLat: dropoffLocation?.latitude || 0,
@@ -144,9 +149,11 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
       coordinateHistory: [],
       driver_job_start_time: null,
       driver_job_end_time: null,
+      tarrif: selectedTarrif?.id || '0', // Default to a standard tariff
+      selectedTarrif : selectedTarrif
     };
 
-    console.log('🚗 JOB Object:', jobObject);
+    // console.log('🚗 JOB Object:', jobObject);
     return jobObject;
   } catch (error) {
     console.error('❌ Error creating job object:', error.message);
@@ -165,6 +172,21 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
       console.error("Error fetching pending jobs:", error.message);
     }
   };
+  const [totalEarningssoFar, setTotalEarningssoFar] = useState(0);
+  const [TotalTripsCompleted, setTotalTripsCompleted] = useState(0);
+    const GET_DRIVER_JOB_DETAILS = async () => {
+    try {
+      const response = await api.get(JOBENDPOINT.GET_DRIVER_JOB_DETAILS(driver?.driverId), {
+        Authorization: `Bearer ${driver.token}`,
+      });
+      setTotalEarningssoFar(response?.totalEarnings);
+      setTotalTripsCompleted(response?.completedRides);
+      console.log("Today job staets Jobs:", response);
+      // setAvailableJobs(response);
+    } catch (error) {
+      console.error("Error fetching pending jobs:", error.message);
+    }
+  };
 
   const fetchActiveJob = async () => {
     try {
@@ -179,10 +201,7 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
         return;
       }
       const job = await CreateJobObject(response[0]);
-    // await database().ref(`jobs/${job.id}`)
-    //   if (job.id)
-    //     database()
-      //   setCurrentJob(job);
+ 
       checkAndSetJob(job)
     } catch (error) {
       console.error("Error fetching active job:", error.message);
@@ -195,11 +214,11 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
   try {
     const snapshot = await database().ref(`jobs/${job.id}`).once('value');
     if (!snapshot.exists()) {
-      // Job doesn't exist in Firebase, so set current job
+      
       setCurrentJob(job);
     } else {
-      // Job exists, skip setting current job
-      console.log(`Job with id ${job.id} already exists in Firebase.`);
+    
+      // console.log(`Job with id ${job.id} already exists in Firebase.`);
     }
   } catch (error) {
     console.error('Error checking job in Firebase:', error);
@@ -213,6 +232,13 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
           Authorization: `Bearer ${driver.token}`,
         }
       );
+      let totalEarnings = 0;
+
+      response.forEach(job => {
+        totalEarnings += parseFloat(job.earningsSoFar || 0);
+      });
+      setTotalEarnings(totalEarnings.toFixed(2)); // Set total earnings to 2 decimal places
+      // console.log("Previous Jobs:", response);
       // const job = await CreateJobObject(response);
       // setCurrentJob(job);
       // console.log("responseresponseresponseresponseprevous", response);
@@ -230,7 +256,11 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
     setDriverDetails(driver);
     fetchInitialUnreadCount();
     fetchPendingJob();
-    fetchActiveJob();
+    GET_DRIVER_JOB_DETAILS();
+    if (!currentJob) {
+       fetchActiveJob();
+    }
+   
     fetchPreviousJobs();
   };
 
@@ -240,7 +270,11 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
   if (shiftStarted && shiftStartTime) {
     intervalId = window.setInterval(() => {
       fetchPendingJob();
-      fetchActiveJob();
+       if (!currentJob) {
+         fetchActiveJob();
+         
+    }
+   GET_DRIVER_JOB_DETAILS();
     }, 30000); // every 30 seconds
   }
 
@@ -258,34 +292,7 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
   };
 }, [userId, shiftStarted, shiftStartTime, driver]);
 
-
-  // useEffect(() => {
-  
-  //   const getpendingjob = async () => {
-  //       let response = await api.get(JOBENDPOINT.GET_PENDING_RIDES,  {
-  //               Authorization: `Bearer ${driver.token}`,
-  //     })
-  //   console.log("availebleJobavailebleJobavailebleJob", response);
-  //        setAvailableJobs(response); 
-  //   }
-  //   getpendingjob(); 
-    
-  //   const getactivejob = async () => {
-  //       let response = await api.get(JOBENDPOINT.GET_DRIVER_ACTIVE_RIDE(driver?.driverId),  {
-  //               Authorization: `Bearer ${driver.token}`,
-  //     })
-       
-  //     setCurrentJob(await CreateJobObject(response));
-  //    }
-  //   getactivejob();
-  //    if (driver) {
-     
-  //     setDriverDetails(driver)
-  //   }
-  //    fetchInitialUnreadCount();
-  //   return setupNewMessageListeners();
-  // }, [userId]);
-
+ 
   const fetchInitialUnreadCount = async () => {
     if (userId) {
       // console.log('Fetching initial unread count for user:', userId);
@@ -372,7 +379,9 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
   };
 const [availableJobs, setAvailableJobs] = useState([]);
 
-const [mockPreviousJobs , setMockPreviousJobs] = useState([]);
+  const [mockPreviousJobs, setMockPreviousJobs] = useState([]);
+    const [totalEarnings, setTotalEarnings] = useState(0);
+  
 
 // --- Initial Setup and Animations ---
 useEffect(() => {
@@ -418,7 +427,7 @@ useEffect(() => {
   };  
 
   if (shiftStarted && shiftStartTime) {
-    console.log("🟢 Online time tracking started");
+    // console.log("🟢 Online time tracking started");
     startTracking();
 
     // 🔁 Double-push fallback: Retry tracking in 100ms if it's the first load
@@ -454,16 +463,14 @@ const handleShiftToggle = useCallback(() => {
       onConfirm: async() => {
         // await shiftStatusChange(false);
         await shiftStatusChange(false, selectedVehicle.id, driver.driverId,driver.token, 'offboard');
-         
-           endShift();         // Clear context + AsyncStorage
+        endShift();         // Clear context + AsyncStorage
         stopService();      // Stop background service
         setIsOnline(false); // Mark offline
+        clearSelectedTarrif(); // Clear selected tariff
          showSuccessToast('Shift Closed', 'You have successfully closed your shift.');
       },
     });
-  } else {
-    setShowVehicleModal(true); // Show modal to select vehicle
-  }
+  }  
 }, [shiftStarted, endShift, setIsOnline]);
 
 const confirmStartShift = useCallback(async () => {
@@ -476,7 +483,7 @@ const confirmStartShift = useCallback(async () => {
   startShift({ plate: tempVehiclePlate, model: tempVehicleModel }); // Start shift and save vehicle
   await startService(); // Ensure background service is running
   setIsOnline(true); // Mark online
-  setShowVehicleModal(false);
+  
   setTempVehiclePlate('');
   setTempVehicleModel('');
   Alert.alert('Shift Started', 'You are now online and ready to accept jobs!');
@@ -487,22 +494,13 @@ const onRefresh = useCallback( () => {
   setRefreshing(true);
   // Simulate fetching new jobs/data
   setTimeout( async () => {
-    // Example: Add a new available job
-    // const newJobId = `a${availableJobs.length + 1}`;
-    // const newJob = {
-    //   id: newJobId,
-    //   destination: `New Destination ${newJobId}`,
-    //   pickup: `New Pickup ${newJobId}`,
-    //   earning: `QAR ${Math.floor(Math.random() * 50) + 50}`,
-    //   estimatedDuration: '10 mins',
-    //   distance: '3.0 km',
-    //   destinationLat: 25.274188294053577,
-    //   destinationLng: 51.5455120537612,
-    //   pickupLat: 25.2933,
-    //   pickupLng: 51.5310,
-    // };
-   await  fetchPendingJob();
-   await fetchActiveJob();
+ 
+    await fetchPendingJob();
+     if (!currentJob) {
+       await fetchActiveJob();
+     }
+   GET_DRIVER_JOB_DETAILS();
+
    await fetchPreviousJobs();
     // setAvailableJobs((prev) => [newJob, ...prev]);
     
@@ -595,6 +593,11 @@ const CreateNewJob = async () => {
       console.warn('⚠️ Reverse geocoding error:', geoError.message);
     }
 
+
+    if(!selectedTarrif?.id) {
+      showErrorToast('Error', 'Please select a tariff before creating a job.');
+      return;
+    }
     // Step 2: Construct job object
     const newJobObject = {
       driverId: driver.driverId,
@@ -609,7 +612,7 @@ const CreateNewJob = async () => {
         latitude: 0,
         longitude: 0,
       },
-      tariffId: '81ad619e-8947-4869-b11c-cfe319cabf65',
+      tariffId: selectedTarrif?.id || '0', // Default to a standard tariff
       passengerCount: 1,
       bagCount: 0,
       wheelchairCount: 0,
@@ -627,7 +630,6 @@ const CreateNewJob = async () => {
     const result = await api.post(JOBENDPOINT.CREATE_RIDE, newJobObject, {
       Authorization: `Bearer ${driver.token}`,
     });
-
     console.log('✅ Job created successfully:', result);
     await fetchActiveJob();
   } catch (error) {
@@ -636,6 +638,8 @@ const CreateNewJob = async () => {
   }
 };
 
+const truncate = (text, limit = 50) => 
+  text?.length > limit ? text.substring(0, limit) + '…' : text;
 
 // --- Render Logic ---
 const renderJobCard = ({ item }) => (
@@ -715,17 +719,28 @@ return (
           </Text>
         </TouchableOpacity> */}
       </View>
-
-      {/* Network Status */}
+      {/* need to show the ccurent selected Tarrif info here */}
+      <View>
+        {isTarrifSelected && (
+          <View style={styles.selectedTarrifContainer}>
+            <Text style={styles.selectedTarrifText}>
+              Tariff: {selectedTarrif?.name || 'Standard'}
+            </Text>
+            <TouchableOpacity
+              style={styles.clearTarrifButton}
+              onPress={clearSelectedTarrif}
+            >
+              <Icon name="chart-bar" size={20} color="#fff" />
+              <Text style={styles.clearTarrifButtonText}>Change Tariff  </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+          </View>
+      
       <NetworkBanner />
+       <CurrentAddress />
      
-      {/* Current Location */}
-      {/* <View style={styles.currentLocationCard}> */}
-        {/* <Icon name="crosshairs-gps" size={24} color="#ADD8E6" /> */}
-        {/* <Text style={styles.currentLocationText}>Your Current Location:</Text> */}
-        <CurrentAddress />
-        {/* <LocationDisplay /> */}
-      {/* </View> */}
+      
 
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
@@ -738,23 +753,29 @@ return (
           />
         }
       >
-        {/* Today's Overview */}
+        
         
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Today’s Overview</Text>
-           <TouchableOpacity  style={[styles.goToJobButton , { backgroundColor: 'red' }]}   onPress={CreateNewJob}  >
-             <Text style={[styles.goToJobButtonText]}  >Create New JOB</Text>
-          </TouchableOpacity>
            
+          {!currentJob  && (
+           <>
+                 <TouchableOpacity style={[styles.goToJobButton, { backgroundColor: '#FF5722' }]} onPress={CreateNewJob}  >
+                  <Text style={[styles.goToJobButtonText]}  >Create New JOB</Text>
+                 </TouchableOpacity>
+              </>
+            
+           )}
           <View style={styles.overviewRow}>
+            
             <View style={styles.overviewItem}>
               <Icon name="cash-multiple" size={28} color="#FFD700" />
-              <Text style={styles.overviewValue}>QAR {parseFloat(driverDetails?.earningsBalance).toFixed(2)}</Text>
+              <Text style={styles.overviewValue}>QAR {parseFloat(totalEarningssoFar).toFixed(2)}</Text>
               <Text style={styles.overviewLabel}>Earnings</Text>
             </View>
             <View style={styles.overviewItem}>
               <Icon name="check-circle-outline" size={28} color="#8BC34A" />
-              <Text style={styles.overviewValue}>{driverDetails?.totalRidesCompleted}</Text>
+              <Text style={styles.overviewValue}>{TotalTripsCompleted}</Text>
               <Text style={styles.overviewLabel}>Trips</Text>
             </View>
             <View style={styles.overviewItem}>
@@ -838,12 +859,44 @@ return (
               scrollEnabled={false} // Disable inner scroll
               renderItem={({ item }) => (
                 <View style={styles.previousJobItem}>
+       
                   <View style={styles.previousJobDetails}>
-                    <Icon name="flag-checkered" size={20} color="#ADD8E6" />
-                    <Text style={styles.previousJobDestination}> {item.pickupLocation?.address} - {item.dropoffLocatio?.address || 'N/A'}</Text>
+                    <View style={{marginBottom: 10}}>
+                         <Text style={styles.addressLabel}>📍 Pickup:</Text>
+                    <Text
+                      style={styles.previousJobAddress}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {truncate(item.pickupLocation?.address)}
+                    </Text>
+                      </View>
+                    <View>
+                      <Text style={styles.addressLabel}>🏁 Dropoff:</Text>
+                    <Text
+                      style={styles.previousJobAddress}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                       
+                     {item.dropoffLocation?.address ?truncate(item.dropoffLocation?.address) : 'N/A'}   
+                   
+                    </Text>
+                      </View>
+
+                    {/* <Icon name="flag-checkered" size={20} color="#ADD8E6" /> */}
+                    {/* <Text style={styles.previousJobDestination}> {item.pickupLocation?.address} - {item.dropoffLocatio?.address || 'N/A'}</Text> */}
                   </View>
-                  <Text style={styles.previousJobEarnings}>{item.fare}</Text>
-                  <Text style={styles.previousJobDate}>{item.createdAt}</Text>
+               
+                 
+                  
+                    <Text style={styles.previousJobDate}>
+                      {new Date(item.createdAt).toLocaleDateString('en-GB', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </Text>
                 </View>
               )}
             />
@@ -852,39 +905,8 @@ return (
       </ScrollView>
     </Animated.View>
 
-    {/* Vehicle Selection Modal */}
-    <Modal
-      animationType="slide"
-      transparent={true}
-      visible={showVehicleModal}
-      onRequestClose={() => setShowVehicleModal(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Enter Vehicle Details</Text>
-          <TextInput
-            style={styles.modalInput}
-            placeholder="Vehicle Plate Number (e.g., QAT-12345)"
-            placeholderTextColor="#888"
-            value={tempVehiclePlate}
-            onChangeText={setTempVehiclePlate}
-          />
-          <TextInput
-            style={styles.modalInput}
-            placeholder="Vehicle Model (e.g., Toyota Camry 2023)"
-            placeholderTextColor="#888"
-            value={tempVehicleModel}
-            onChangeText={setTempVehicleModel}
-          />
-          <TouchableOpacity style={styles.modalButton} onPress={confirmStartShift}>
-            <Text style={styles.modalButtonText}>Confirm & Start Shift</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.modalCancelButton} onPress={() => setShowVehicleModal(false)}>
-            <Text style={styles.modalCancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
+    
+    
   </SafeAreaView>
 );
 };
@@ -1311,12 +1333,12 @@ previousJobItem: {
   shadowRadius: 3,
   elevation: 5,
 },
-previousJobDetails: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  gap: 10,
-  flex: 1,
-},
+// previousJobDetails: {
+//   flexDirection: 'row',
+//   alignItems: 'center',
+//   gap: 10,
+//   flex: 1,
+// },
 previousJobDestination: {
   color: '#fff',
   fontSize: 12,
@@ -1397,6 +1419,54 @@ modalCancelButtonText: {
   fontSize: 16,
   fontWeight: 'bold',
 },
+ selectedTarrifContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+ 
+    marginHorizontal: 15,
+ 
+    marginTop: 10,
+
+    textTransform: 'capitalize',
+
+  },
+  selectedTarrifText: {
+    color: '#FFD700',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textTransform: 'capitalize',
+  },
+  clearTarrifButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'green',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 15,
+    gap: 5,
+  },
+  clearTarrifButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  previousJobDetails: {
+  flexDirection: 'column',
+  marginBottom: 6,
+},
+
+previousJobAddress: {
+  fontSize: 14,
+  color: 'white',
+},
+
+addressLabel: {
+  fontWeight: '600',
+  color: '#666',
+  fontSize: 12,
+},
+
 });
 
 export default HomeScreen;

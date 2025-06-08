@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Dimensions, ActivityIndicator, TouchableOpacity, Alert, Animated, Image } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import useLocationStore from '../../../store/locationStore';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker , PROVIDER_GOOGLE } from 'react-native-maps';
 import CarIcon from './carSvg';
 
 const { width, height } = Dimensions.get('window');
@@ -105,7 +105,7 @@ const LocationDisplay = () => {
 
   return (
     <View style={styles.container}>
-      <MapView 
+      {/* <MapView 
         ref={mapRef}
         style={styles.map}
            initialRegion={{
@@ -145,21 +145,56 @@ const LocationDisplay = () => {
        >
         </Marker>  
                   
-        {/* <Marker
-          coordinate={{ latitude, longitude }}
-          anchor={{ x: 0.5, y: 0.5 }}
-          flat={true}
-          rotation={heading}
-        >
+       
+      </MapView> */}
+       <MapView
+           ref={mapRef}
+          provider={PROVIDER_GOOGLE}
+          style={styles.map}
+          initialRegion={{
+              latitude: latitude,
+            longitude: longitude,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          }}
+          showsBuildings={true} 
+          pitchEnabled={true} 
+          zoomEnabled
+          scrollEnabled
+          rotateEnabled
          
-          
-            <Image
-              source={{ uri: CarIcon }}
-              style={{ width: 60, height: 60, resizeMode: 'contain' }}
-            />
-          
-        </Marker> */}
-      </MapView>
+          zoomControlEnabled
+          zoomTapEnabled
+          loadingEnabled
+          // customMapStyle={mapStyle}
+          showsCompass
+          showsMyLocationButton
+          showsUserLocation={true} // we're using custom marker
+          showsTraffic={false}
+          showsScale={false}
+          showsIndoors={false}
+          showsIndoorLevelPicker={false}
+          showsPointsOfInterest={false}
+        >
+          {/* Driver Marker */}
+            <Marker  coordinate={{ latitude, longitude }}
+            flat={true}
+              // rotation={currentJob?.heading} // ← yes sir, point the damn car the right way
+              anchor={{ x: 0.5, y: 0.5 }}>
+             <View style={styles.markerContainer}>
+                <Icon
+                  name="taxi"
+                  size={25}
+                  color="red"
+                  backgroundColor="white"
+                  style={styles.taxiIcon}
+                />
+                <View style={styles.pinBottom} />
+              </View>
+          </Marker>
+
+         
+        </MapView>
       <TouchableOpacity
         style={styles.addressContainer}
         onPress={fetchError ? null : null}
@@ -167,7 +202,7 @@ const LocationDisplay = () => {
       >
         <Icon name="map-marker-outline" size={20} color="#ADD8E6" />
         <Text style={styles.addressText}>
-          {isFetchingAddress && !fetchError ? 'Fetching address...' : locationName}
+          {isFetchingAddress && !fetchError ?  latitude+', '+ longitude : locationName}
         </Text>
         {isFetchingAddress && !fetchError && <ActivityIndicator size="small" color="#ADD8E6" style={styles.spinner} />}
         {fetchError && (
@@ -181,21 +216,44 @@ const LocationDisplay = () => {
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
+    margin: 10,
     borderRadius: 12,
     backgroundColor: 'rgba(30,30,30,0.8)',
+     borderWidth: 2,
+    borderColor: 'rgba(155, 145, 145, 0.8)',
+    overflow: 'hidden',
   },
   map: {
+  marginTop: 10,
+  width: width - 2 * SPACING_HORIZONTAL,
+  height: height * 0.20,
+  borderRadius: 15, // slightly more for a nice round
+  marginBottom: 10,
+  overflow: 'hidden', // crucial for clipping the child (map)
+  // Remove borderWidth unless necessary
+  // borderWidth: 20,
+  // borderColor: 'red',
+  shadowColor: '#000', // optional: keep or adjust shadow if needed
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.3,
+  shadowRadius: 4,
+  elevation: 5, // for Android shadow
+},
 
-     marginTop: 10,
-    width: width - 2 * SPACING_HORIZONTAL,
-    height: height * 0.1,
-    borderRadius: 10,
-    marginBottom: 10,
-    overflow: 'hidden',
-    borderWidth: 20,
-    borderColor: 'red',
-    shadowColor: 'white',
-  },
+  // map: {
+
+  //    marginTop: 10,
+  //   width: width - 2 * SPACING_HORIZONTAL,
+  //   height: height * 0.20,
+    
+
+  //   borderRadius: 10,
+  //   marginBottom: 10,
+  //   overflow: 'hidden',
+  //   borderWidth: 20,
+  //   borderColor: 'red',
+  //   shadowColor: 'white',
+  // },
   addressContainer: {
     flexDirection: 'row',
     alignItems: 'center',
