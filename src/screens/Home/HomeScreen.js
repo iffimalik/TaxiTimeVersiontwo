@@ -22,6 +22,7 @@ import NetInfo from '@react-native-community/netinfo';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons'; // Using MaterialCommunityIcons
 import auth from '@react-native-firebase/auth'; // Assuming Firebase Auth is set up
 import useJobStore from '../../store/jobStore';
+
 import useLocationStore from '../../store/locationStore';
 import { ShiftContext } from '../../context/ShiftContext';
 import { startService, stopService } from './../../BackgroundService'; // Assuming these exist
@@ -35,12 +36,17 @@ import { showConfirmationToast, showInfoToast, showSuccessToast  , showErrorToas
 import database from '@react-native-firebase/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { shiftStatusChange } from '../../utils/common';
-import { JOBENDPOINT } from '../../utils/constants';
+import { ENDPOINTS, JOBENDPOINT } from '../../utils/constants';
 import api from '../../services/api';
 import { create } from 'zustand';
 import { TarrifContext } from '../../context/TarrifContext';
 // import { setupAudio , playNewMessageSound } from './AudioMessage';
-// import Sound from 'react-native-sound'; // Import react-native-sound
+import Sound from 'react-native-sound'; // Import react-native-sound
+import LocationHeader from './HomeComponent/LocationBlink'
+import { set } from 'date-fns';
+// import useNotificationSound from './SoundFile';
+ 
+
 
 
 // Enable LayoutAnimation for Android
@@ -68,22 +74,36 @@ return `${minutes}m ${secondsLeft}s`;
 };
 
 const HomeScreen = () => {
+// const { playSound } = useNotificationSound(); // 👈 Call the hook
 const navigation = useNavigation();
 const [logoutLoading, setLogoutLoading] = useState(false);
-const [refreshing, setRefreshing] = useState(false);
+const [jobCreateLoading, setJobCreateLoading] = useState(!currentJob ? true : false);
+
+  const [refreshing, setRefreshing] = useState(false);
 const [showVehicleModal, setShowVehicleModal] = useState(false);
 const [tempVehiclePlate, setTempVehiclePlate] = useState('');
 const [tempVehicleModel, setTempVehicleModel] = useState('');
 
 const { shiftStarted, shiftStartTime, selectedVehicle, shiftCloseTime, startShift, endShift ,  driver , vehicles  } = useContext(ShiftContext);
-const {clearSelectedTarrif , isNeedtoRefresh, selectedTarrif, isTarrifSelected , availableTariffs , detectedZone } = useContext(TarrifContext);
-  const { currentJob, setCurrentJob, setJobStatus, setIsOnline } = useJobStore();
+const {clearSelectedTarrif , isNeedtoRefresh, selectedTarrif,setSelectedTarrif, isTarrifSelected , availableTariffs , detectedZone } = useContext(TarrifContext);
+  const { currentJob, setCurrentJob, setJobStatus, setIsOnline , updateCurrentJob , clearJob } = useJobStore();
 const { isBackgroundServiceRunning  , latitude, longitude} = useLocationStore();
-  
-
+  const [statusModalVisible, setStatusModalVisible] = useState(false);
+const [selectedStatus, setSelectedStatus] = useState(null);
+  const handleSubmit = () => {
+    if (selectedStatus) {
+      updateDriverStatus(selectedStatus);
+      setStatusModalVisible(false);
+    }
+  };
+// const currentStatus = driverDetailsApi?.driverStatus;
+  // console.log("currentJobcurrentJobcurrentJobcurrentJobcurrentJob", currentJob , jobCreateLoading);
 // Animation value for fade-in effect
 const fadeAnim = useRef(new Animated.Value(0)).current;
 
+ 
+
+  
 // Mock Data (replace with API calls)
 const [todayEarnings, setTodayEarnings] = useState(0);
 const [tripsCompletedToday, setTripsCompletedToday] = useState(0);
@@ -96,13 +116,13 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
    // Load the sound file outside useEffect
  
   
-    const CreateJobObject = async (response) => {
+     const CreateJobObject = async (response) => {
   try {
     if (!response) return null;
 
     if (!selectedTarrif?.id)
       return showErrorToast('Error', 'Please select a tariff before accepting a job.');
-
+ 
     const {
       id,
       pickupLocation,
@@ -118,8 +138,27 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
       rider,
       notes,
       tarrif,
+      paymentStatus,
+      paymentMethod,
+      RideType,
+      tariffId,
+      passengerCount,
+          bagCount,
+       wheelchairCount,
+       wheelchairAccessNeeded,
+      towingOption,
+      jobStatusLog,
+    
+      
+      
+        
     } = response;
 
+    
+    if (tariffId) {
+        setSelectedTarrif(availableTariffs?.find(t => t.id === tariffId));
+      }
+     
     const jobObject = {
       id: id || '',
       pickupLocation: pickupLocation?.address || 'N/A',
@@ -134,7 +173,7 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
       dropoffTime: dropoffTime || '',
       earningsSoFar: earningsSoFar || '0.00',
       estimatedFare: fare ?? '0.00',
-      status: status || 'pending',
+      status: status == 'sending' ? 'displayed' :  status || 'pending',
       distance: distance ?? '0.0',
       estimatedDuration: duration || 'N/A',
       riderName: rider?.name || 'Guest User',
@@ -147,12 +186,24 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
       destinationLat: dropoffLocation?.latitude || 0,
       destinationLng: dropoffLocation?.longitude || 0,
       coordinateHistory: [],
-      driver_job_start_time: null,
       driver_job_end_time: null,
-      tarrif: selectedTarrif?.id || '0', // Default to a standard tariff
-      selectedTarrif : selectedTarrif
+      tariff: selectedTarrif?.id || '0', // Default to a standard tariff
+      selectedTarrif: selectedTarrif,
+      driver_job_start_time: new Date().toISOString(),
+      fair : earningsSoFar || '0.00',
+      paymentStatus,
+      paymentMethod,
+      RideType,
+      tariffId,
+      passengerCount,
+          bagCount,
+       wheelchairCount,
+       wheelchairAccessNeeded,
+      towingOption,
+      jobStatusLog,
+    
     };
-
+ 
     // console.log('🚗 JOB Object:', jobObject);
     return jobObject;
   } catch (error) {
@@ -169,11 +220,13 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
       // console.log("Available Jobs:", response);
       setAvailableJobs(response);
     } catch (error) {
+       setAvailableJobs([]);
       console.error("Error fetching pending jobs:", error.message);
     }
   };
   const [totalEarningssoFar, setTotalEarningssoFar] = useState(0);
   const [TotalTripsCompleted, setTotalTripsCompleted] = useState(0);
+  const [driverDetailsApi, setDriverDetailsApi] = useState(null);
     const GET_DRIVER_JOB_DETAILS = async () => {
     try {
       const response = await api.get(JOBENDPOINT.GET_DRIVER_JOB_DETAILS(driver?.driverId), {
@@ -181,7 +234,15 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
       });
       setTotalEarningssoFar(response?.totalEarnings);
       setTotalTripsCompleted(response?.completedRides);
-      console.log("Today job staets Jobs:", response);
+      setDriverDetailsApi(response.DriverDetails);
+      if(response.DriverDetails?.driverStatus === 'offline' || response.DriverDetails?.driverStatus === 'away') {
+        if (!currentJob) {
+           setStatusModalVisible(true)
+        }
+       
+      }
+
+      // console.log("Today job staets Jobs:", response);
       // setAvailableJobs(response);
     } catch (error) {
       console.error("Error fetching pending jobs:", error.message);
@@ -196,30 +257,39 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
           Authorization: `Bearer ${driver.token}`,
         }
       );
-      if(response?.length === 0) {
-        // setCurrentJob(null);
-        return;
+
+      console.log("response?.length", response?.length);
+      if(response?.length  != 0) {
+        
+         setJobCreateLoading(false);
+         
       }
-      const job = await CreateJobObject(response[0]);
- 
-      checkAndSetJob(job)
+      if (jobCreateLoading == false) {
+        if(response.length == 0) {
+          setJobCreateLoading(true);
+        }
+      }
+      console.log("response", response); 
+      if (response?.length >= 1) {
+        const job = await CreateJobObject(response[0]);
+        console.log("jobxxxxxxxxxxxxxxxxxx", job);
+        checkAndSetJob(job);
+      }
+
     } catch (error) {
       console.error("Error fetching active job:", error.message);
     }
   };
 
     const checkAndSetJob = async (job) => {
-  if (!job?.id) return;
+        if (!job?.id) return;
 
-  try {
-    const snapshot = await database().ref(`jobs/${job.id}`).once('value');
-    if (!snapshot.exists()) {
-      
-      setCurrentJob(job);
-    } else {
-    
-      // console.log(`Job with id ${job.id} already exists in Firebase.`);
-    }
+      try {
+        console.log("jobnnnnnnnnnnn", job);
+        setCurrentJob(job);
+        setJobStatus(job.status || 'pending');
+        setJobCreateLoading(false);
+        
   } catch (error) {
     console.error('Error checking job in Firebase:', error);
   }
@@ -240,7 +310,7 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
       setTotalEarnings(totalEarnings.toFixed(2)); // Set total earnings to 2 decimal places
       // console.log("Previous Jobs:", response);
       // const job = await CreateJobObject(response);
-      // setCurrentJob(job);
+    
       // console.log("responseresponseresponseresponseprevous", response);
       setMockPreviousJobs(response);
         // setAvailableJobs(response);
@@ -251,32 +321,82 @@ const [onlineTime, setOnlineTime] = useState(0); // in seconds
   useEffect(() => {
   let intervalId: number | null = null;
 
-  const initialize = () => {
-    if (!driver) return;
-    setDriverDetails(driver);
-    fetchInitialUnreadCount();
-    fetchPendingJob();
-    GET_DRIVER_JOB_DETAILS();
-    if (!currentJob) {
-       fetchActiveJob();
+
+  const initialize = async () => {
+  if (!driver) return;
+
+  // Define terminal statuses that should clear the current job
+  const TERMINAL_STATUSES = ['finished', 'cancelled', 'noShow', 'recalled', 'rejected'];
+
+  try {
+    // Execute initialization steps in parallel where possible
+    await Promise.all([
+      setDriverDetails(driver),
+      fetchInitialUnreadCount(),
+      fetchPendingJob()
+    ]);
+
+    // Get current job details
+    await GET_DRIVER_JOB_DETAILS();
+
+    // Clean up if current job is in terminal state
+    if (currentJob && TERMINAL_STATUSES.includes(currentJob.status)) {
+      await   clearJob();
+      // currentJob = null;
     }
-   
-    fetchPreviousJobs();
-  };
+
+    // Only fetch active job if we don't have a valid current job
+    // if (!currentJob) {
+    //   await fetchActiveJob();
+    // }
+
+    // Fetch previous jobs (don't await as it's not critical for initialization)
+    fetchPreviousJobs().catch(error => 
+      console.error('Error fetching previous jobs:', error)
+    );
+
+  } catch (error) {
+    console.error('Initialization error:', error);
+    // Handle error appropriately (e.g., show user notification)
+  }
+};
 
   initialize();
 
   // Conditionally start interval
-  if (shiftStarted && shiftStartTime) {
-    intervalId = window.setInterval(() => {
-      fetchPendingJob();
-       if (!currentJob) {
-         fetchActiveJob();
-         
+ if (shiftStarted && shiftStartTime) {
+  // Define terminal statuses that should clear the current job
+  const TERMINAL_STATUSES = ['finished', 'cancelled', 'noShow', 'recalled', 'rejected'];
+  
+  intervalId = window.setInterval(async () => {
+    try {
+      // 1. Check for pending jobs first
+      await fetchPendingJob();
+     
+      // 2. Handle terminal job states
+      if (currentJob  && TERMINAL_STATUSES.includes(currentJob?.status)) {
+        // await updateCurrentJob({ currentJob: null, jobStatus: 'pending' });
+        await clearJob();
+        // currentJob = null;
+      }
+
+      // 3. If no current job, try to fetch an active one
+      // if (!currentJob) {
+      //   await fetchActiveJob();
+      // } else if (currentJob  && TERMINAL_STATUSES.includes(currentJob?.status)) {
+      //   // If current job is in terminal state, clear it
+      //    await fetchActiveJob();
+      // }
+
+      // 4. Always refresh job details
+      await GET_DRIVER_JOB_DETAILS();
+      
+    } catch (error) {
+      console.error('Error during job polling interval:', error);
+      // Consider adding retry logic or error notification here
     }
-   GET_DRIVER_JOB_DETAILS();
-    }, 30000); // every 30 seconds
-  }
+  }, 30000); // every 30 seconds
+}
 
   const unsubscribe = setupNewMessageListeners();
 
@@ -410,9 +530,13 @@ useEffect(() => {
     unsubscribeNetInfo();
   };
 }, [fadeAnim, isBackgroundServiceRunning, setIsOnline]);
-
+Sound.setCategory('Playback');
 // --- Online Time Tracking ---
-useEffect(() => {
+  useEffect(  () => {
+  
+ 
+
+     
   // console.log("🟡 Online time tracking started:", shiftStarted, JSON.stringify(shiftStartTime));
 
   const startTracking = () => {
@@ -495,11 +619,11 @@ const onRefresh = useCallback( () => {
   // Simulate fetching new jobs/data
   setTimeout( async () => {
  
-    await fetchPendingJob();
-     if (!currentJob) {
-       await fetchActiveJob();
-     }
-   GET_DRIVER_JOB_DETAILS();
+    // await fetchPendingJob();
+    //  if (!currentJob) {
+    //    await fetchActiveJob();
+    //  }
+   await GET_DRIVER_JOB_DETAILS();
 
    await fetchPreviousJobs();
     // setAvailableJobs((prev) => [newJob, ...prev]);
@@ -527,6 +651,7 @@ const handleAcceptJob = useCallback((job) => {
     onConfirm: async () => {
       try {
         // Create a UI-friendly job object
+        job.status = 'started';
         const jobObject = await CreateJobObject(job);
         if (!jobObject) {
           showErrorToast('Error', 'Failed to process job details.');
@@ -560,10 +685,14 @@ const handleAcceptJob = useCallback((job) => {
   });
 }, [setCurrentJob, setAvailableJobs, navigation]);
 
+  
 
-const handleGoToActiveJob = useCallback(() => {
+const handleGoToActiveJob = useCallback(async () => {
   if (currentJob) {
-    navigation.navigate('JobTrackingScreen', { job: currentJob });
+    console.log('Navigating to active job:', currentJob);
+     await useJobStore.getState().initializeJobFromFirebase();
+    // navigation.replace('JobTrackingScreen', { job: currentJob }); // Navigate to tracking screen
+      // navigation.replace('JobTrackingScreen', { job: currentJob });
   } else {
     // Alert.alert('No Active Job', 'You do not have an active job currently.');
     showInfoToast('No Active Job', 'You do not have an active job currently.');
@@ -573,6 +702,8 @@ const handleGoToActiveJob = useCallback(() => {
   
 const CreateNewJob = async () => {
   try {
+
+    setJobCreateLoading(false);
     // Step 1: Try to reverse geocode pickup address
     let displayName = 'No address found';
     try {
@@ -621,7 +752,8 @@ const CreateNewJob = async () => {
       notes: '',
       pickupTime: new Date().toISOString(),
       dropoffTime: '',
-      status:'started'
+      status: 'started',
+      job_from : 'driver'
     };
 
     console.log('🆕 New Job Object:', newJobObject);
@@ -632,6 +764,7 @@ const CreateNewJob = async () => {
     });
     console.log('✅ Job created successfully:', result);
     await fetchActiveJob();
+     setJobCreateLoading(true);
   } catch (error) {
     console.error('❌ Failed to create job:', error.message);
     showErrorToast('Job Creation Failed', error.message);
@@ -651,7 +784,7 @@ const renderJobCard = ({ item }) => (
     <View style={styles.jobCardHeader}>
       <Icon name="map-marker-outline" size={20} color="#ADD8E6" />
       <Text style={styles.jobDestination}>{item?.dropoffLocation?.address}</Text>
-      <Text style={styles.jobEarning}>{item?.fare}</Text>
+      <Text style={styles.jobEarning}>{item?.earningsSoFar}</Text>
       <Text style={styles.jobDetailText}> <Icon name="human-male" size={20} color="#ccc"></Icon>{ item?.passengerCount }</Text>
         <Text style={styles.jobDetailText}> <Icon name="human-wheelchair" size={20} color="#ccc"></Icon>{ item?.wheelchairCount }</Text>
 
@@ -675,11 +808,106 @@ const renderJobCard = ({ item }) => (
     </TouchableOpacity>
   </TouchableOpacity>
 );
+  
+  // Define status transitions
+const getAvailableStatusOptions = (status) => {
+  switch (status) {
+    case 'available':
+      return ['away', 'offline'];
+    case 'away':
+      return ['available', 'offline'];
+    case 'offline':
+    case 'suspended':
+      return ['available', 'away'];
+    case 'onRide':
+      return []; // cannot switch during a ride
+    default:
+      return ['available', 'away'];
+  }
+};
+
+// API call (you can replace this)
+const updateDriverStatus = async (newStatus) => {
+  try {
+    // await yourApiCallToUpdateDriverStatus(newStatus);
+
+      const response = await api.put(
+          ENDPOINTS.DRIVER_STATUS_CHANGE,
+          { status: newStatus },
+          {
+            Authorization: `Bearer ${driver.token}`,
+          }
+      );
+     
+        if(response) {
+         await GET_DRIVER_JOB_DETAILS();
+        }
+
+    console.log("Driver status updated to:", newStatus);
+    setStatusModalVisible(false);
+  } catch (err) {
+    console.error("Failed to update driver status:", err);
+  }
+};
   const goToChat = useCallback(() => {
     setUnreadChatCount(0); // Reset unread count when navigating to chat
     navigation.navigate('ChatScreen');
   }, [navigation]);
-return (
+  return (
+    <>
+   <Modal
+      visible={statusModalVisible}
+      transparent
+      animationType="fade" // 'fade' looks smoother for overlays
+      onRequestClose={() => setStatusModalVisible(false)}
+    >
+      <SafeAreaView style={styles.modalOverlay}>
+        <View style={styles.modalContainer}>
+          <Text style={styles.modalTitle}>Are you available?</Text>
+
+          {/* Status Options */}
+          <View style={styles.statusOptionsContainer}>
+            {getAvailableStatusOptions(driverDetailsApi?.driverStatus).map((status) => (
+              <TouchableOpacity
+                key={status}
+                onPress={() => setSelectedStatus(status)}
+                style={[
+                  styles.statusOptionButton,
+                  selectedStatus === status && styles.statusOptionButtonSelected,
+                ]}
+              >
+                <Text style={[
+                  styles.statusOptionText,
+                  selectedStatus === status && styles.statusOptionTextSelected,
+                ]}>
+                  {status === 'available' ? 'Online' : status.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                </Text>
+                {selectedStatus === status && (
+                  <Icon name="check-circle" size={20} color="#E0E0E0" style={styles.checkIcon} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Action Buttons */}
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity onPress={() => setStatusModalVisible(false)} style={styles.cancelButton}>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleSubmit}
+              style={[styles.submitButton, !selectedStatus && styles.submitButtonDisabled]}
+              disabled={!selectedStatus}
+            >
+              <Text style={styles.submitButtonText}>Submit</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    </Modal>
+
+
+
   <SafeAreaView style={styles.safeArea}>
     <StatusBar barStyle="light-content" backgroundColor="#121212" />
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
@@ -690,10 +918,34 @@ return (
           <Icon name="account-circle" size={36} color="#FFD700" />
           <View style={{ marginLeft: 10 }}>
             <Text style={styles.driverName}>{driverDetails?.userName}</Text>
+            <TouchableOpacity onPress={() => setStatusModalVisible(true)} style={{ flexDirection: 'row', alignItems: 'center' }}>
+
             <Text style={styles.driverStatus}>
-              <Icon name={shiftStarted ? "circle" : "circle-outline"} size={12} color={shiftStarted ? "#4CAF50" : "#FF5722"} />
-              {shiftStarted ? ' Online' : ' Offline'}
-            </Text>
+               <Icon
+                  name="circle"
+                  size={20}
+                  color={
+                    driverDetailsApi?.driverStatus === 'available' ? '#4CAF50' :     // Green
+                    driverDetailsApi?.driverStatus === 'onRide' ? '#F44336' :       // Red
+                    driverDetailsApi?.driverStatus === 'away' ? '#FF9800' :         // Yellow
+                    driverDetailsApi?.driverStatus === 'suspended' ? '#9E9E9E' :    // Gray
+                    '#9E9E9E' // Default
+                  }
+                  style={{ marginRight: 10 }}
+                />
+              {/* <Icon name={shiftStarted ? "circle" : "circle-outline"} size={12} color={shiftStarted ? "#4CAF50" : "#FF5722"} /> */}
+              {/* {shiftStarted ? ' Online' : ' Offline'}
+               */}
+                {/* {driverDetailsApi?.driverStatus} */}
+              {
+                driverDetailsApi?.driverStatus == 'available' ? 'Online' 
+              : driverDetailsApi?.driverStatus == 'onRide' ? 'Busy' 
+              : driverDetailsApi?.driverStatus == 'away' ? 'Away'
+              : driverDetailsApi?.driverStatus == 'suspended' ? 'Suspended'
+                      : 'Offline'
+              }
+              </Text>
+              </TouchableOpacity>
           </View>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -710,37 +962,19 @@ return (
               <Text style={styles.shiftToggleButtonText}>
                 {shiftStarted ? 'End Shift' : 'Start Shift'}
               </Text>
-            </TouchableOpacity>
+              </TouchableOpacity>
+           
           </View>
-        {/* <TouchableOpacity onPress={handleShiftToggle} style={styles.shiftToggleButton} activeOpacity={0.7}>
-          <Icon name={shiftStarted ? "power-off" : "power"} size={24} color="#fff" />
-          <Text style={styles.shiftToggleButtonText}>
-            {shiftStarted ? 'End Shift' : 'Start Shift'}
-          </Text>
-        </TouchableOpacity> */}
+  
       </View>
       {/* need to show the ccurent selected Tarrif info here */}
       <View>
-        {isTarrifSelected && (
-          <View style={styles.selectedTarrifContainer}>
-            <Text style={styles.selectedTarrifText}>
-              Tariff: {selectedTarrif?.name || 'Standard'}
-            </Text>
-            <TouchableOpacity
-              style={styles.clearTarrifButton}
-              onPress={clearSelectedTarrif}
-            >
-              <Icon name="chart-bar" size={20} color="#fff" />
-              <Text style={styles.clearTarrifButtonText}>Change Tariff  </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-          </View>
+          <LocationHeader navigation={navigation} />
+       </View>
       
       <NetworkBanner />
-       <CurrentAddress />
-     
-      
+      <CurrentAddress />
+
 
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
@@ -757,8 +991,8 @@ return (
         
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Today’s Overview</Text>
-           
-          {!currentJob  && (
+          
+          {!currentJob  && jobCreateLoading && (
            <>
                  <TouchableOpacity style={[styles.goToJobButton, { backgroundColor: '#FF5722' }]} onPress={CreateNewJob}  >
                   <Text style={[styles.goToJobButtonText]}  >Create New JOB</Text>
@@ -770,7 +1004,7 @@ return (
             
             <View style={styles.overviewItem}>
               <Icon name="cash-multiple" size={28} color="#FFD700" />
-              <Text style={styles.overviewValue}>QAR {parseFloat(totalEarningssoFar).toFixed(2)}</Text>
+              <Text style={styles.overviewValue}>${parseFloat(totalEarningssoFar).toFixed(2)}</Text>
               <Text style={styles.overviewLabel}>Earnings</Text>
             </View>
             <View style={styles.overviewItem}>
@@ -908,6 +1142,8 @@ return (
     
     
   </SafeAreaView>
+    
+    </>
 );
 };
 
@@ -995,6 +1231,118 @@ const mapStyle = [
 
 
 const styles = StyleSheet.create({
+  // model section
+     modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)', // Darker, more prominent overlay
+  },
+  modalContainer: {
+    backgroundColor:'rgb(255, 255, 255)',
+    padding: 25,
+    borderRadius: 15,
+    width: '90%', // More responsive width
+    maxWidth: 400, // Max width for larger screens
+    shadowColor: '#000', // Stronger shadow for depth
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 20, // Android elevation
+  },
+  modalTitle: {
+    color: 'black', // Light text for contrast
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 25, // More space below title
+    textAlign: 'center',
+    textTransform: 'uppercase',
+  },
+  statusOptionsContainer: {
+    marginBottom: 20,
+  },
+  statusOptionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between', // Space out text and icon
+    paddingVertical: 14,
+    paddingHorizontal: 15,
+    borderRadius: 8,
+    marginBottom: 10,
+    backgroundColor: '#333', // Default background for options
+    borderWidth: 1,
+    borderColor: '#444', // Subtle border
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  statusOptionButtonSelected: {
+    backgroundColor: '#007AFF', // Vibrant blue when selected
+    borderColor: '#007AFF',
+  },
+  statusOptionText: {
+    color: '#E0E0E0',
+    fontSize: 16,
+    fontWeight: '500',
+    flex: 1, // Allows text to take available space
+  },
+  statusOptionTextSelected: {
+    color: '#FFF', // White text for selected option
+  },
+  checkIcon: {
+    marginLeft: 10, // Space between text and checkmark
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 30, // More space above buttons
+    gap: 15, // Space between buttons
+  },
+  cancelButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 25,
+    borderRadius: 8,
+    backgroundColor: '#555', // Darker cancel button
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  cancelButtonText: {
+    color: '#E0E0E0',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  submitButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 25,
+    borderRadius: 8,
+    backgroundColor: '#4CAF50', // Success green
+    shadowColor: '#4CAF50', // Green shadow for vibrancy
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 5,
+    elevation: 6,
+  },
+  submitButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#6A6A6A', // Disabled color
+    shadowColor: 'transparent',
+    elevation: 0,
+  },
+  //model section
+
+
+
+
+
 safeArea: {
   flex: 1,
   backgroundColor: '#1a1a1a', // Dark background for the whole screen
@@ -1056,8 +1404,9 @@ driverName: {
 },
 driverStatus: {
   color: '#ccc',
-  fontSize: 13,
+  fontSize: 14,
   marginTop: 2,
+  textTransform: 'capitalize',
 },
 shiftToggleButton: {
   flexDirection: 'row',
@@ -1373,12 +1722,7 @@ modalContent: {
   shadowRadius: 20,
   elevation: 20,
 },
-modalTitle: {
-  color: '#fff',
-  fontSize: 22,
-  fontWeight: 'bold',
-  marginBottom: 20,
-},
+ 
 modalInput: {
   width: '100%',
   backgroundColor: '#333',
@@ -1466,7 +1810,38 @@ addressLabel: {
   color: '#666',
   fontSize: 12,
 },
-
+  // Tariff Section Compact Styles
+  tariffSectionCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(20,20,20,0.9)',
+    paddingVertical: 8, // Reduced padding
+    paddingHorizontal: 15,
+    borderRadius: 8, // Smaller border radius
+    marginHorizontal: 15,
+    marginTop: 8,
+  },
+  tariffTextCompact: {
+    color: '#FFD700',
+    fontSize: 14, // Smaller font
+    fontWeight: 'bold',
+  },
+  tariffRatesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap', // Allow wrapping for small screens
+    marginTop: 2,
+  },
+  tariffRateText: {
+    fontSize: 9, // Very small font for rates
+    color: 'white',
+    marginRight: 8, // Spacing between rate items
+  },
+  changeTariffButtonCompact: {
+    backgroundColor: 'green',
+    padding: 6, // Smaller padding
+    borderRadius: 12, // Smaller border radius
+  },
 });
 
 export default HomeScreen;

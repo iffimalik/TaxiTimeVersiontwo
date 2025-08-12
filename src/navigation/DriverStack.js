@@ -17,18 +17,28 @@ import { TarrifContext } from '../context/TarrifContext';
 import { JobContext } from '../context/jobContext';
 
 import CompleteJobScreen from '../screens/Home/CompleteJobScreen';
+import PauseJobScreen from '../screens/Home/JobPausedScreen';
+
 import ChatScreen from '../screens/Chat/ChatScreen';
 import DetailedChatScreen from '../screens/Chat/DetailedChatScreen';
+import { stopService } from '../BackgroundService';
 const Stack = createNativeStackNavigator();
 
 const DriverStack = () => {
   const [initializing, setInitializing] = useState(true);
   const [user, setUser] = useState(null);
   const { shiftStarted } = useContext(ShiftContext);
-  const { isTarrifSelected , isNeedtoRefresh } = useContext(TarrifContext);
-  const { currentJob,  jobStatus, } = useContext(JobContext);
+  const { isTarrifSelected , isNeedtoRefresh , selectedTarrif } = useContext(TarrifContext);
+  const { currentJob,  jobStatus, initializeJobFromFirebase } = useContext(JobContext);
+  // console.log("🚀 ~ DriverStack ~ currentJob:", currentJob);
+  useEffect(() => {
+  
+    // console.log("currentJob", currentJob);
 
-useEffect(() => {
+    if (!user) {
+      stopService()
+    }
+
   const unsubscribe = auth().onAuthStateChanged((authUser) => {
     
     setUser(authUser);
@@ -56,15 +66,17 @@ useEffect(() => {
       </>
     ) : !shiftStarted ? (
       <Stack.Screen name="StartShiftScreen" component={StartShiftScreen} />
-    ) : isNeedtoRefresh ? (
+    ) :  isNeedtoRefresh == false ? (
       <Stack.Screen name="TarrifSelectionScreen" component={TarrifSelectionScreen} />
-    ) : currentJob != null && ['pending', 'accepted', 'on_the_way', 'arrived_ready', 'arrived'].includes(jobStatus) ? (
+    ) : currentJob != null && ['pending', 'accepted', 'on_the_way', 'arrived_ready', 'arrived' , 'sending' , 'displayed'].includes(jobStatus) ? (
       <Stack.Screen name="AcceptJobScreen" component={JobAcceptScreen} />
     ) : currentJob != null && jobStatus === 'started' ? (
       <Stack.Screen name="JobTrackingScreen" component={JobTrackingScreen}  initialParams={{ job: currentJob }} />
     ) : currentJob != null && jobStatus === 'completed' ? (
       <Stack.Screen name="CompleteJobScreen" component={CompleteJobScreen} initialParams={{ job: currentJob }}  />
-    ) : currentJob != null && ['finished', 'cancelled'].includes(jobStatus) ? (
+    ) : currentJob != null && jobStatus === 'paused' ? (
+      <Stack.Screen name="pauseJobScreen" component={PauseJobScreen} initialParams={{ job: currentJob }}  />
+    ) : currentJob != null && ['finished', 'cancelled','noShow'].includes(jobStatus) ? (
       <Stack.Screen name="Home" component={HomeScreen} />
     ) : (
       <>

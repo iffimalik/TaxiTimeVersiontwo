@@ -1,5 +1,4 @@
-// screens/Home/TarrifSelectionScreen.js
-import React, { useState, useCallback, useContext, useEffect } from 'react';
+import React, { useState, useCallback, useContext, useEffect, useRef } from 'react'; // Import useRef
 import {
   View,
   Text,
@@ -14,53 +13,59 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { TarrifContext } from '../../context/TarrifContext';
-import { ShiftContext } from '../../context/ShiftContext'; // To access startShift
-import { getCurrentLocationforce, startService } from '../../BackgroundService'; // getCurrentLocationforce for fetching location
+import { ShiftContext } from '../../context/ShiftContext';
+import { getCurrentLocationforce, startService } from '../../BackgroundService';
 import database from '@react-native-firebase/database';
 import auth from '@react-native-firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { showErrorToast, showSuccessToast } from '../../utils/showToast';
 import { shiftStatusChange } from '../../utils/common';
-import useLocationStore from '../../store/locationStore'; // To get current location from store
+import useLocationStore from '../../store/locationStore';
 
 const { width } = Dimensions.get('window');
 const SPACING = width * 0.05;
 const ITEM_MARGIN_BOTTOM = 10;
+const MAX_RETRY_ATTEMPTS = 10; // Define your retry limit
 
 const TarrifSelectionScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
-  // selectedVehicle is still passed via route params from StartShiftScreen
   const { selectedVehicle } = route.params || {};
 
-  // Consume relevant states and functions from TarrifContext
+  const { isBackgroundServiceRunning } = useLocationStore();
+
   const {
-    isNeedtoRefresh,
     fetchZoneAndTariffs,
-    selectTarrif,
-    selectedTarrif,
+    updateSelectedTarrif,
     availableTariffs,
-    updateisNeedtoRefresh,
-    detectedZone, // Get detectedZone from context
+    detectedZone,
+    selectedTarrif,
+    setIsNeedtoRefresh,
+    updateisNeedtoRefresh
   } = useContext(TarrifContext);
 
-  const { startShift, driver } = useContext(ShiftContext);
-  const { latitude, longitude } = useLocationStore(); // Get live location from store
+  const { driver ,  startShift} = useContext(ShiftContext);
+  const { latitude, longitude } = useLocationStore();
 
-  // Local state for location if not immediately available from store (though store is preferred)
   const [currentLatitude, setCurrentLatitude] = useState(latitude);
   const [currentLongitude, setCurrentLongitude] = useState(longitude);
-
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [isLoadingTariffs, setIsLoadingTariffs] = useState(false);
-  const [refreshTariffs, setRefreshTariffs] = useState(false); // State to trigger re-fetching of tariffs if needed
-  // State to track the currently selected tariff locally for UI feedback
-  const [currentSelectedTariffId, setCurrentSelectedTariffId] = useState(selectedTarrif?.id || null);
+  const [refreshTariffsFlag, setRefreshTariffsFlag] = useState(false);
+  const [isGoingOnline, setIsGoingOnline] = useState(false);
 
-  // Effect to fetch initial location if not already in store
+  // New state for retry mechanism
+  const [tariffFetchRetryCount, setTariffFetchRetryCount] = useState(0);
+
+  const [currentSelectedTariffId, setCurrentSelectedTariffId] = useState(selectedTarrif?.id || null);
+  console.log("🚀 ~ TarrifSelectionScreen ~ selectedTarrif:", selectedTarrif);
+  // Effect 1: Start background service if not running & Fetch initial location
   useEffect(() => {
-    const fetchInitialLocation = async () => {
-      // If location is not available from store, try to get it forcefully
+    if (!isBackgroundServiceRunning) {
+      startService();
+    }
+
+    const fetchAndSetInitialLocation = async () => {
       if (latitude === null || longitude === null) {
         setIsLoadingLocation(true);
         try {
@@ -75,103 +80,73 @@ const TarrifSelectionScreen = () => {
         }
       }
     };
-    fetchInitialLocation();
-  }, [latitude, longitude , refreshTariffs]); // Re-run if store location changes (unlikely to be null after initial load)
+    fetchAndSetInitialLocation();
+  }, [isBackgroundServiceRunning, latitude, longitude]);
 
-  // Effect to fetch tariffs once location and driver token are available
+  // Effect 2: Fetch tariffs when location or refresh flag changes, with retry limit
   useEffect(() => {
     const loadTariffs = async () => {
-      console.log('Loading tariffs with current location:', currentLatitude, currentLongitude);
-      // Only fetch if location is available, driver token is available, AND tariffs/zone haven't been loaded yet by context
-      if (currentLatitude !== null && currentLongitude !== null && driver?.token && !availableTariffs.length && !detectedZone) {
+      if (currentLatitude !== null && currentLongitude !== null && driver?.token) {
         setIsLoadingTariffs(true);
         try {
-          // This call will update `detectedZone` and `availableTariffs` in TarrifContext
           await fetchZoneAndTariffs(currentLatitude, currentLongitude, driver.token);
+          // If fetch was successful, reset retry count
+          setTariffFetchRetryCount(0);
         } catch (error) {
-          console.error('Error fetching zone and tariffs in TariffSelectionScreen:', error);
+          console.error('Error fetching zone and tariffs:', error);
           showErrorToast('API Error', 'Failed to fetch tariffs for your location. Please try again.');
+          // Increment retry count only on fetch failure
+          setTariffFetchRetryCount(prev => prev + 1);
         } finally {
           setIsLoadingTariffs(false);
         }
       }
     };
-    loadTariffs();
-  }, [refreshTariffs]);
 
-  // Effect to ensure the local selection reflects the context's selected tariff on mount/context change
+    // Logic to control when `loadTariffs` runs
+    // It runs if:
+    // 1. Tariffs are currently empty (or null/undefined)
+    // 2. AND we haven't exceeded the maximum retry attempts
+    if ((!availableTariffs || availableTariffs.length === 0) && tariffFetchRetryCount < MAX_RETRY_ATTEMPTS) {
+      loadTariffs();
+    } else if (availableTariffs && availableTariffs.length === 0 && tariffFetchRetryCount >= MAX_RETRY_ATTEMPTS) {
+        // If we've hit the retry limit and still no tariffs, log it and let UI handle it
+        console.warn(`Reached max retry attempts (${MAX_RETRY_ATTEMPTS}) for tariffs. Manual refresh needed.`);
+        // Optionally, show a specific persistent toast or message here
+    }
+
+  }, [currentLatitude, currentLongitude, driver?.token, fetchZoneAndTariffs, refreshTariffsFlag, availableTariffs, tariffFetchRetryCount]); // Dependencies for this effect
+
+  // Effect 3: Sync local selected tariff ID with context's `selectedTarrif`
   useEffect(() => {
-    if (selectedTarrif && selectedTarrif.id !== currentSelectedTariffId) {
-      setCurrentSelectedTariffId(selectedTarrif.id);
-    }
-  }, [selectedTarrif, currentSelectedTariffId]);
+    setCurrentSelectedTariffId(selectedTarrif?.id || null);
+  }, [selectedTarrif]);
 
+  // Callbacks remain the same
   const handleSelectTariff = useCallback((tariff) => {
-
-
-    setCurrentSelectedTariffId(tariff.id);
-    selectTarrif(tariff); // Store the selected tariff in TarrifContext
-  }, [selectTarrif]);
-
-  const handleGoOnline = useCallback(async () => {
-    const userId = auth().currentUser?.uid;
-
-    // if (!selectedVehicle) {
-    //   showErrorToast('Error', 'No vehicle selected. Please go back to the previous screen.');
-    //   navigation.goBack(); // Navigate back to StartShiftScreen
-    //   return;
-    // }
-    setIsLoadingTariffs(true);
-    updateisNeedtoRefresh(true)
-
-
-    if (!selectedTarrif || !currentSelectedTariffId) {
-      showErrorToast('Selection Required', 'Please select a tariff to go online.');
-      return;
-    }
-
-    // `detectedZone` is now from context
-    if (detectedZone    && selectedTarrif && userId) {
-      try {
-        let CompanyId = await AsyncStorage.getItem('CompanyId') || '1';
-
-         updateisNeedtoRefresh(false)
-   
-        showSuccessToast('Shift Started', `You are now online with  ${selectedTarrif.name} tariff!`);
-        // navigation.replace('Home'); // Navigate to Home after successfully going online
-      } catch (error) {
-        console.error('Error going online with vehicle and tariff:', error);
-        showErrorToast('Error', 'Failed to go online. Please try again.');
-      }
-    } else {
-      showErrorToast('Error', 'Missing vehicle, tariff, or zone information to go online.');
-    }
-  }, [selectedVehicle, selectedTarrif, currentSelectedTariffId, detectedZone, startShift, driver, navigation]);
+    updateSelectedTarrif(tariff);
+    setCurrentSelectedTariffId(tariff?.id || null);
+  }, [updateSelectedTarrif]);
 
   const renderTariffItem = useCallback(({ item }) => {
     const isSelected = currentSelectedTariffId === item.id;
     return (
       <TouchableOpacity
-        style={[
-          styles.tariffItem,
-          isSelected && styles.selectedTariff,
-        ]}
-        onPress={() => {
-           handleSelectTariff(item)
-        }}
+        style={[styles.tariffItem, isSelected && styles.selectedTariff]}
+        onPress={() => handleSelectTariff(item)}
         activeOpacity={0.7}
       >
         <Icon name="cash-multiple" size={24} color={isSelected ? '#FFD700' : '#ADD8E6'} style={styles.tariffIcon} />
         <View style={styles.tariffDetails}>
           <Text style={[styles.tariffName, isSelected && styles.selectedTariffText]}>{item.name}</Text>
           <Text style={styles.tariffDescription}>
-            Starting Price: ${item.startingPrice} for {item.startingDistance}m
+            Starting Price: ${item.startingPrice}
           </Text>
           <Text style={styles.tariffDescription}>
-            Distance Rate: ${item.distanceRate}/m | Time Rate: ${item.timeRate}/s
+            Distance Rate: ${item.distanceRate * 1000}/Km | Time Rate: ${item.timeRate * 60}/min
           </Text>
           <Text style={styles.tariffDescription}>
-            Waiting Rate: ${item.waitingRate}/s
+            Waiting Rate: ${parseFloat(item.waitingRate * 60).toFixed(2)}/min
           </Text>
         </View>
         {isSelected && <Icon name="check-circle" size={24} color="#4CAF50" style={styles.checkIcon} />}
@@ -179,20 +154,79 @@ const TarrifSelectionScreen = () => {
     );
   }, [currentSelectedTariffId, handleSelectTariff]);
 
-  // Conditional rendering for loading states or no data
-  if (isLoadingLocation || isLoadingTariffs) {
+  const handleGoOnline = useCallback(async () => {
+    if (!selectedTarrif || !currentSelectedTariffId) {
+      showErrorToast('Selection Required', 'Please select a tariff to go online.');
+      return;
+    }
+
+    if (isGoingOnline) return;
+    setIsGoingOnline(true);
+
+    try {
+      const userId = auth().currentUser?.uid;
+      if (!userId) {
+        showErrorToast('Authentication Error', 'User not authenticated. Please log in again.');
+        await auth().signOut();
+        return;
+      }
+
+      // await startShift( selectedTarrif);
+      updateisNeedtoRefresh(true)
+      showSuccessToast('Shift Started', `You are now online with ${selectedTarrif.name} tariff!`);
+      // navigation.replace('Home');
+    } catch (error) {
+      console.error('Error going online:', error.message);
+      showErrorToast('Error', `Failed to go online: ${error.message || 'Please try again.'}`);
+    } finally {
+      setIsGoingOnline(false);
+    }
+  }, [selectedTarrif, currentSelectedTariffId, isGoingOnline, startShift, navigation]);
+
+
+  // --- Conditional Rendering for UI States ---
+
+  // Loading indicator
+  if (isLoadingLocation || isLoadingTariffs || isGoingOnline) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#FFD700" />
         <Text style={styles.loadingText}>
-          {isLoadingLocation ? 'Getting your location...' : 'Finding tariffs for your zone...'}
+          {isGoingOnline ? 'Going online...' : isLoadingLocation ? 'Getting your location...' : 'Finding tariffs for your zone...'}
         </Text>
       </View>
     );
   }
 
-  // Display message if no tariffs are available.
-  // This implicitly covers cases where no zone was detected as `availableTariffs` would be empty.
+  // Display message if no tariffs are available AND we've exhausted retries
+  if ((!availableTariffs || availableTariffs.length === 0) && tariffFetchRetryCount >= MAX_RETRY_ATTEMPTS) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#121212" />
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Select Tariff</Text>
+        </View>
+        <Text style={styles.noTariffsText}>
+          No tariffs found. Please try refreshing manually.
+          {detectedZone ? ` Detected Zone: ${detectedZone.zoneName}.` : ''}
+        </Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.refreshButton}
+          onPress={() => {
+            setTariffFetchRetryCount(0); // Reset retry count for manual refresh
+            setRefreshTariffsFlag(prev => !prev); // Trigger re-fetching
+          }}
+        >
+          <Text style={styles.backButtonText}>Refresh Tariffs Manually</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // Display message if no tariffs are available but we are still trying to fetch
   if (!availableTariffs || availableTariffs.length === 0) {
     return (
       <View style={styles.container}>
@@ -201,33 +235,29 @@ const TarrifSelectionScreen = () => {
           <Text style={styles.headerTitle}>Select Tariff</Text>
         </View>
         <Text style={styles.noTariffsText}>
-          {/* Display more specific message if a zone was detected but had no tariffs */}
-          {detectedZone ? `No tariffs found for zone: ${detectedZone.zoneName}.` : 'No tariffs available for your current location (zone not detected or no tariffs assigned).'}
+          Searching for tariffs for your location... (Attempt {tariffFetchRetryCount + 1} of {MAX_RETRY_ATTEMPTS})
+          {detectedZone ? ` Detected Zone: ${detectedZone.zoneName}.` : ''}
         </Text>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <Text style={styles.backButtonText}>Go Back</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.refreshButton} onPress={() => {
-            setRefreshTariffs(!refreshTariffs); // Trigger re-fetching of tariffs
-          }}>
-            <Text style={styles.backButtonText}>Refresh</Text>
-        </TouchableOpacity>
+        {/* No auto-refresh button here, it's handled by the effect */}
       </View>
     );
   }
 
+  // Main content when tariffs are loaded
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#121212" />
 
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Select Your Tariff</Text>
-        {/* Only display zone name if detectedZone is available */}
         {detectedZone?.zoneName && <Text style={styles.zoneInfo}>Detected Zone: {detectedZone.zoneName}</Text>}
       </View>
 
       <FlatList
-        data={availableTariffs} // Display tariffs from TarrifContext
+        data={availableTariffs}
         keyExtractor={(item) => item.id}
         renderItem={renderTariffItem}
         contentContainerStyle={styles.tariffList}
@@ -237,11 +267,13 @@ const TarrifSelectionScreen = () => {
       <TouchableOpacity
         style={[styles.goOnlineButton, !currentSelectedTariffId && styles.disabledButton]}
         onPress={handleGoOnline}
-        disabled={!currentSelectedTariffId}
+        disabled={!currentSelectedTariffId || isGoingOnline}
         activeOpacity={0.7}
       >
         <Icon name="power" size={20} color="#fff" style={styles.goOnlineButtonIcon} />
-        <Text style={styles.goOnlineButtonText}>{ !currentSelectedTariffId ? 'Select to Go Online' : 'Choose Tariff' }</Text>
+        <Text style={styles.goOnlineButtonText}>
+          {isGoingOnline ? 'Processing...' : !currentSelectedTariffId ? 'Select to Go Online' : 'Choose Tariff'}
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -364,7 +396,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginTop: 30,
   },
-   refreshButton: {
+  refreshButton: {
     backgroundColor: 'green',
     paddingVertical: 12,
     paddingHorizontal: 20,

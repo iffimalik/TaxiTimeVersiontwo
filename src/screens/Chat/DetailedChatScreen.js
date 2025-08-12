@@ -60,7 +60,7 @@ const DetailedChatScreen = ({ route, navigation }) => {
 
     if (!userId || !otherUserId) {
       console.warn('Missing userId or otherUserId for chat.');
-      navigation.goBack();
+      // navigation.goBack();
       return;
     }
 

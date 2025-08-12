@@ -2,12 +2,19 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Dimensions, ActivityIndicator, TouchableOpacity, Alert, Animated, Image } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import useLocationStore from '../../../store/locationStore';
-import MapView, { Marker , PROVIDER_GOOGLE } from 'react-native-maps';
-import CarIcon from './carSvg';
+// Removed PROVIDER_GOOGLE import as we are no longer using it for tiles
+import MapView, { Marker, UrlTile } from 'react-native-maps'; // Import UrlTile for custom tile server
+// CarIcon is not used in the provided snippet's JSX, so it's kept as-is or can be removed if truly unused.
+// import CarIcon from './carSvg';
 
 const { width, height } = Dimensions.get('window');
 const SPACING_HORIZONTAL = width * 0.04;
-const CAR_JUMP_GIF_URL = './marker.png';
+const CAR_JUMP_GIF_URL = './marker.png'; // This path needs to be resolved for actual image use
+
+// Define the OpenStreetMap tile URL template
+// This is a common and generally free-to-use OSM tile server.
+// Always check the usage policies of any tile server you use, especially for high-volume apps.
+const OSM_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 const LocationDisplay = () => {
   const { latitude, longitude, heading = 0 } = useLocationStore();
@@ -18,7 +25,7 @@ const LocationDisplay = () => {
   const mapRef = useRef(null);
   const debounceTimeoutRef = useRef(null);
   const lastFetchedCoords = useRef({ lat: null, lng: null });
-  const jumpAnim = useRef(new Animated.Value(0)).current; // For potential additional animation
+  const jumpAnim = useRef(new Animated.Value(0)).current;
 
   const fetchLocationName = useCallback(async (lat, lon) => {
     if (isFetchingAddress) return;
@@ -38,6 +45,7 @@ const LocationDisplay = () => {
     setLocationName('Fetching address...');
 
     try {
+      // Using Nominatim for reverse geocoding, which is also part of OpenStreetMap ecosystem and free for reasonable use.
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`
       );
@@ -59,17 +67,21 @@ const LocationDisplay = () => {
 
   useEffect(() => {
     if (latitude !== null && longitude !== null && mapRef.current) {
-      mapRef.current.animateToRegion(
+      mapRef.current.animateCamera(
         {
-          latitude,
-          longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
+          center: {
+            latitude,
+            longitude,
+          },
+          heading: parseInt(heading || 0),
+          pitch: 55,
+          zoom: 15,
+          altitude: 500,
         },
-        1000
+        { duration: 1000 }
       );
     }
-  }, [latitude, longitude]);
+  }, [latitude, longitude, heading]);
 
   useEffect(() => {
     if (latitude !== null && longitude !== null) {
@@ -78,7 +90,7 @@ const LocationDisplay = () => {
       }
       debounceTimeoutRef.current = setTimeout(() => {
         fetchLocationName(latitude, longitude);
-      }, 130000);
+      }, 130000); // Increased debounce time for address fetching
 
       return () => {
         if (debounceTimeoutRef.current) {
@@ -92,7 +104,14 @@ const LocationDisplay = () => {
     }
   }, [latitude, longitude, fetchLocationName]);
 
-  
+  const handleRetry = useCallback(() => {
+    if (latitude !== null && longitude !== null) {
+      fetchLocationName(latitude, longitude);
+    } else {
+      Alert.alert('Location Unavailable', 'Cannot retry without valid GPS coordinates.');
+    }
+  }, [latitude, longitude, fetchLocationName]);
+
 
   if (latitude === null || longitude === null) {
     return (
@@ -102,107 +121,75 @@ const LocationDisplay = () => {
       </View>
     );
   }
+const STADIA_MAPS_ALIDADE_SMOOTH = 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png';
 
   return (
     <View style={styles.container}>
-      {/* <MapView 
+      <MapView
         ref={mapRef}
+    
+        cacheEnabled={false}
         style={styles.map}
-           initialRegion={{
-             latitude: latitude,
-            longitude: longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          }}
-            showsUserLocation={true} // We'll use a custom marker
-            zoomEnabled={true}
-        scrollEnabled={true}
-        rotateEnabled={true}
+        initialRegion={{
+          latitude: latitude,
+          longitude: longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }}
+ 
+        showsBuildings={false}
         pitchEnabled={true}
-          region={{ // Keep map centered on current location
-            latitude: latitude,
-            longitude: longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          }}
-          showsMyLocationButton={true}
-          showsCompass={true}
-          showsTraffic={false}
-          showsScale={true}
-          showsIndoors={false}
-          showsBuildings={false}
-          showsPointsOfInterest={false}
-          followsUserLocation={true} // Automatically follow user location
-          zoomControlEnabled={true}
-          zoomTapEnabled={true}
-        
-          loadingEnabled
-      >
-          <Marker
-                    coordinate={{ latitude, longitude }}
-                    title="Your Location"
-                    pinColor="green"
-       >
-        </Marker>  
-                  
+        zoomEnabled
+        scrollEnabled
+        rotateEnabled
+        zoomControlEnabled
+        zoomTapEnabled
+        // loadingEnabled
        
-      </MapView> */}
-       <MapView
-           ref={mapRef}
-          provider={PROVIDER_GOOGLE}
-          style={styles.map}
-          initialRegion={{
-              latitude: latitude,
-            longitude: longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          }}
-          showsBuildings={true} 
-          pitchEnabled={true} 
-          zoomEnabled
-          scrollEnabled
-          rotateEnabled
-         
-          zoomControlEnabled
-          zoomTapEnabled
-          loadingEnabled
-          // customMapStyle={mapStyle}
-          showsCompass
-          showsMyLocationButton
-          showsUserLocation={true} // we're using custom marker
-          showsTraffic={false}
-          showsScale={false}
-          showsIndoors={false}
-          showsIndoorLevelPicker={false}
-          showsPointsOfInterest={false}
-        >
-          {/* Driver Marker */}
-            <Marker  coordinate={{ latitude, longitude }}
-            flat={true}
-              // rotation={currentJob?.heading} // ← yes sir, point the damn car the right way
-              anchor={{ x: 0.5, y: 0.5 }}>
-             <View style={styles.markerContainer}>
-                <Icon
-                  name="taxi"
-                  size={25}
-                  color="red"
-                  backgroundColor="white"
-                  style={styles.taxiIcon}
-                />
-                <View style={styles.pinBottom} />
-              </View>
-          </Marker>
+        showsCompass={false}
+        showsMyLocationButton={false}
+        showsUserLocation={false}
+        showsTraffic={false}
+        showsScale={false}
+        showsIndoors={false}
+        showsIndoorLevelPicker={false}
+        showsPointsOfInterest={false}
+      >
+{/*     
+        <UrlTile
+          urlTemplate={OSM_TILE_URL}
+          zIndex={-1} // Ensure tiles are rendered below markers
+        /> */}
 
-         
-        </MapView>
+         <UrlTile
+          urlTemplate={STADIA_MAPS_ALIDADE_SMOOTH}
+          zIndex={-1}
+        />
+        <Marker
+          coordinate={{ latitude, longitude }}
+          flat={true}
+          anchor={{ x: 0.5, y: 0.5 }}
+        >
+          <View style={styles.markerContainer}>
+            <Icon
+              name="taxi"
+              size={25}
+              color="red"
+              backgroundColor="white"
+              style={styles.taxiIcon}
+            />
+            <View style={styles.pinBottom} />
+          </View>
+        </Marker>
+      </MapView>
       <TouchableOpacity
         style={styles.addressContainer}
-        onPress={fetchError ? null : null}
+        onPress={fetchError ? handleRetry : null}
         activeOpacity={fetchError ? 0.7 : 1}
       >
         <Icon name="map-marker-outline" size={20} color="#ADD8E6" />
         <Text style={styles.addressText}>
-          {isFetchingAddress && !fetchError ?  latitude+', '+ longitude : locationName}
+          {isFetchingAddress && !fetchError ? 'Fetching address...' : `${locationName} ${latitude},${longitude}`}
         </Text>
         {isFetchingAddress && !fetchError && <ActivityIndicator size="small" color="#ADD8E6" style={styles.spinner} />}
         {fetchError && (
@@ -213,47 +200,46 @@ const LocationDisplay = () => {
   );
 };
 
+// Remove the minimalRoadMapStyle as it's specifically for Google Maps' styling API.
+// const minimalRoadMapStyle = [...] // DELETE THIS CONST
+
 const styles = StyleSheet.create({
+  markerContainer: {
+    alignItems: 'center',
+  },
+  pinBottom: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'red',
+    marginBottom: -3,
+  },
+  taxiIcon: {
+    borderRadius: 50,
+    padding: 5,
+  },
   container: {
     alignItems: 'center',
     margin: 10,
     borderRadius: 12,
     backgroundColor: 'rgba(30,30,30,0.8)',
-     borderWidth: 2,
+    borderWidth: 2,
     borderColor: 'rgba(155, 145, 145, 0.8)',
     overflow: 'hidden',
   },
   map: {
-  marginTop: 10,
-  width: width - 2 * SPACING_HORIZONTAL,
-  height: height * 0.20,
-  borderRadius: 15, // slightly more for a nice round
-  marginBottom: 10,
-  overflow: 'hidden', // crucial for clipping the child (map)
-  // Remove borderWidth unless necessary
-  // borderWidth: 20,
-  // borderColor: 'red',
-  shadowColor: '#000', // optional: keep or adjust shadow if needed
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.3,
-  shadowRadius: 4,
-  elevation: 5, // for Android shadow
-},
-
-  // map: {
-
-  //    marginTop: 10,
-  //   width: width - 2 * SPACING_HORIZONTAL,
-  //   height: height * 0.20,
-    
-
-  //   borderRadius: 10,
-  //   marginBottom: 10,
-  //   overflow: 'hidden',
-  //   borderWidth: 20,
-  //   borderColor: 'red',
-  //   shadowColor: 'white',
-  // },
+    marginTop: 10,
+    width: width - 2 * SPACING_HORIZONTAL,
+    height: height * 0.20,
+    borderRadius: 15,
+    marginBottom: 10,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
   addressContainer: {
     flexDirection: 'row',
     alignItems: 'center',

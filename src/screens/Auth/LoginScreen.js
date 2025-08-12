@@ -146,8 +146,11 @@ const handleLogin = useCallback(async () => {
     const driverResponse = await api.post(ENDPOINTS.LOGIN_DRIVER, { email, password });
 
     const driverData = driverResponse; // Adjust based on your actual response structure
-     const driverId = driverResponse?.driverId || '1'; // fallback if needed
-
+    const driverId = driverResponse?.driverId || '1'; // fallback if needed
+        let token = driverResponse?.token;
+    await AsyncStorage.setItem('authToken', token);
+    let driverDetail = driverResponse?.driverObject;
+    await AsyncStorage.setItem('driverDetail', JSON.stringify(driverDetail));
     if (!driverId) throw new Error('Driver ID not found in response');
 
     // console.log('✅ Driver data fetched:', driverData);

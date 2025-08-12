@@ -24,13 +24,9 @@ import { shiftStatusChange } from '../../utils/common';
 const { width } = Dimensions.get('window');
 const SPACING = width * 0.05;
 const ITEM_MARGIN_BOTTOM = 10;
+import useLocationStore from '../../store/locationStore';
 
-// const dummyVehicles = [
-//   { id: 'v1', name: 'Toyota Camry', type: 'Sedan', plate: 'QAT-12345', icon: 'car-sedan' },
-//   { id: 'v2', name: 'Hyundai Santa Fe', type: 'SUV', plate: 'QAT-67890', icon: 'suv' },
-//   { id: 'v3', name: 'Nissan Patrol', type: 'SUV', plate: 'QAT-11223', icon: 'suv' },
-// ];
-
+ 
 
  
 
@@ -41,7 +37,7 @@ const StartShiftScreen = () => {
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [dummyVehicles, setDummyVehicles] = useState([]);
   const [selectedDriver, setSelectedDriver] = useState(null);
- 
+ const {  latitude, longitude} = useLocationStore();
 
   useEffect(() => {
     const fetchVehicles = async () => {   
@@ -70,21 +66,29 @@ const handleStartShift = useCallback(async () => {
       try {
            
         let CompanyId = await AsyncStorage.getItem('CompanyId')||'1';
-      
-        shiftStatusChange(true , selectedVehicle?.id , driver.driverId ,driver.token, 'onboard');
+        if (driver?.driverId) {
+           shiftStatusChange(true , selectedVehicle?.id , driver?.driverId ,driver?.token, 'onboard');
+        }
+       
  
       
         // Mark user as online in Firebase
         await database().ref(`companies/${CompanyId}/onlineAgents/${userId}`).set({
+          currentLocation: {
+            latitude,
+            longitude,
+            timestamp: database.ServerValue.TIMESTAMP,  
+           },
           vehicle: selectedVehicle,
           lastOnline: database.ServerValue.TIMESTAMP,
         });
+        
 
         startShift(selectedVehicle);
         startService();
         // Alert.alert('Shift Started', `You are now online with ${selectedVehicle.name}!`);
         showSuccessToast('Shift Started', `You are now online with ${selectedVehicle.vehicleNumber}!`);
-        navigation.replace('Home');
+        // navigation.replace('Home');
       } catch (error) {
         console.log("error", error);
         console.error('Error marking user online:', error);
