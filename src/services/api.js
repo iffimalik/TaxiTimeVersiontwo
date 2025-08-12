@@ -3,12 +3,12 @@ import { showErrorToast } from "../utils/showToast";
 import { Alert } from 'react-native';
  
 // const BASE_URL = 'http://admin.taxitime.co.nz'; // Replace with your actual base URL
-// export const BASE_URL = "https://taxitime.co.nz/api";
+export const BASE_URL = "https://taxitime.co.nz/api";
 // export const BASE_URL = 'http://10.0.5.10:3000'; // Replace with your actual base URL
-export const BASE_URL = 'http://192.168.18.5:3000'; // Replace with your actual base URL
+// export const BASE_URL = 'http://192.168.18.5:3000'; // Replace with your actual base URL
 // export const BASE_URL_SOCKET = '10.0.5.10:3000';
-// export const BASE_URL_SOCKET = 'taxitime.co.nz/api';
-export const BASE_URL_SOCKET = '192.168.18.5:3000';
+export const BASE_URL_SOCKET = 'taxitime.co.nz/api';
+// export const BASE_URL_SOCKET = '192.168.18.5:3000';
 const request = async (method, endpoint, data = null, headers = {}) => {
   try {
     const response = await axios({
